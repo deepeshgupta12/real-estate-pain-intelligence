@@ -1,4 +1,5 @@
 from app.models.agent_insight import AgentInsight
+from app.models.export_job import ExportJob
 from app.models.human_review_item import HumanReviewItem
 from app.models.notion_sync_job import NotionSyncJob
 from app.models.raw_evidence import RawEvidence
@@ -16,4 +17,5 @@ __all__ = [
     "RetrievalDocument",
     "HumanReviewItem",
     "NotionSyncJob",
+    "ExportJob",
 ]
