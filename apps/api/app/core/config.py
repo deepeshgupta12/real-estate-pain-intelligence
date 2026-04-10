@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     app_version: str = "0.2.0"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+    database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/repi_db"
 
     model_config = SettingsConfigDict(
         env_file=".env",

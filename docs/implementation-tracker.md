@@ -68,7 +68,6 @@ Status: Completed
 - `docs/implementation-tracker.md`
 - `apps/api/pyproject.toml`
 - `apps/api/.env.example`
-- `apps/api/README.md`
 - `apps/api/app/__init__.py`
 - `apps/api/app/api/__init__.py`
 - `apps/api/app/api/v1/__init__.py`
@@ -83,7 +82,6 @@ Status: Completed
 - `apps/api/tests/conftest.py`
 - `apps/api/tests/test_health.py`
 - `apps/web/.env.local.example`
-- `apps/web/README.md`
 - `apps/web/src/lib/api.ts`
 - `apps/web/src/components/status-card.tsx`
 - `apps/web/src/components/section-card.tsx`
@@ -133,8 +131,6 @@ Status: Completed
 - `apps/api/tests/test_health.py`
 - `apps/api/tests/test_meta.py`
 - `apps/api/tests/test_root.py`
-- `apps/api/.env.example`
-- `apps/api/README.md`
 
 #### Test notes
 - Pytest: 3 tests passing
@@ -189,3 +185,51 @@ Status: Completed
 
 #### Next step after completion
 - Step 4 — Database foundation
+
+### Step 4 — Database foundation
+Status: Completed
+
+#### Delivered
+- PostgreSQL docker setup added
+- SQLAlchemy base and session added
+- DATABASE_URL added to settings
+- Alembic initialized
+- First migration added
+- `system_state` model added
+- Database-aware startup check added
+- System info endpoint added
+- Database foundation test coverage added
+
+#### Implemented files
+- `apps/api/.env`
+- `apps/api/.env.example`
+- `apps/api/docker-compose.yml`
+- `apps/api/alembic.ini`
+- `apps/api/alembic/env.py`
+- `apps/api/alembic/script.py.mako`
+- `apps/api/alembic/versions/0001_create_system_state.py`
+- `apps/api/app/db/base.py`
+- `apps/api/app/db/session.py`
+- `apps/api/app/db/models.py`
+- `apps/api/app/models/system_state.py`
+- `apps/api/app/schemas/system.py`
+- `apps/api/app/api/v1/system.py`
+- `apps/api/app/api/v1/router.py`
+- `apps/api/app/core/config.py`
+- `apps/api/app/core/lifespan.py`
+- `apps/api/pyproject.toml`
+- `apps/api/tests/test_system_info.py`
+
+#### Test notes
+- Docker Postgres starts successfully on port 5460
+- Alembic migration runs successfully
+- Pytest: 4 tests passing
+- System info endpoint working
+- Backend startup includes DB connection check success
+
+#### Known issues
+- Database usage is foundational only in this step
+- No business entities beyond `system_state` yet
+
+#### Next step after completion
+- Step 5 — Evidence and run models
