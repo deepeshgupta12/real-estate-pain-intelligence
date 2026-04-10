@@ -355,3 +355,44 @@ Status: Completed
 
 #### Next step after completion
 - Step 8 — Streaming pipeline
+
+### Step 8 — Streaming pipeline
+Status: Completed
+
+#### Delivered
+- `run_events` model added
+- Run event schemas added
+- Run event service added
+- Run event APIs added
+- Orchestrator transitions now persist timeline events
+- Queue response was refined for streaming-style summaries
+- Alembic migration for run events table added
+- Tests added for event creation and retrieval flows
+
+#### Implemented files
+- `apps/api/app/models/run_event.py`
+- `apps/api/app/models/__init__.py`
+- `apps/api/app/db/models.py`
+- `apps/api/app/schemas/run_event.py`
+- `apps/api/app/services/run_events.py`
+- `apps/api/app/services/orchestrator.py`
+- `apps/api/app/api/v1/run_events.py`
+- `apps/api/app/schemas/orchestrator.py`
+- `apps/api/app/api/v1/orchestrator.py`
+- `apps/api/app/api/v1/router.py`
+- `apps/api/alembic/versions/0004_run_events_table.py`
+- `apps/api/tests/test_run_events.py`
+
+#### Test notes
+- Alembic migration for run events passes
+- Pytest: 12 tests passing
+- Run-events endpoints visible in Swagger
+- Run events are persisted during orchestration flow
+- Run timeline retrieval works correctly
+
+#### Known issues
+- Event pipeline is persisted and queryable but not yet pushed over WebSockets/SSE
+- Frontend is not yet consuming run event streams
+
+#### Next step after completion
+- Step 9 — Cleaning and normalization foundation
