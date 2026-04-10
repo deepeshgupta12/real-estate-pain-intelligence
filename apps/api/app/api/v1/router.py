@@ -7,6 +7,7 @@ from app.api.v1.meta import router as meta_router
 from app.api.v1.multilingual import router as multilingual_router
 from app.api.v1.normalization import router as normalization_router
 from app.api.v1.orchestrator import router as orchestrator_router
+from app.api.v1.retrieval import router as retrieval_router
 from app.api.v1.run_events import router as run_events_router
 from app.api.v1.runs import router as runs_router
 from app.api.v1.scrape_execution import router as scrape_execution_router
@@ -24,3 +25,4 @@ api_router.include_router(run_events_router)
 api_router.include_router(normalization_router)
 api_router.include_router(multilingual_router)
 api_router.include_router(intelligence_router)
+api_router.include_router(retrieval_router)
