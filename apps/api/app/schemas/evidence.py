@@ -19,6 +19,12 @@ class RawEvidenceCreateRequest(BaseModel):
     normalized_language: str | None = None
     normalization_status: str = Field(default="pending", min_length=1, max_length=50)
     normalization_hash: str | None = None
+    resolved_language: str | None = None
+    language_family: str | None = None
+    script_label: str | None = None
+    multilingual_status: str = Field(default="pending", min_length=1, max_length=50)
+    multilingual_notes: str | None = None
+    bridge_text: str | None = None
     language: str | None = None
     is_relevant: bool = True
     metadata_json: dict[str, Any] = Field(default_factory=dict)
@@ -40,6 +46,12 @@ class RawEvidenceResponse(BaseModel):
     normalized_language: str | None
     normalization_status: str
     normalization_hash: str | None
+    resolved_language: str | None
+    language_family: str | None
+    script_label: str | None
+    multilingual_status: str
+    multilingual_notes: str | None
+    bridge_text: str | None
     language: str | None
     is_relevant: bool
     metadata_json: dict[str, Any]

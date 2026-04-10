@@ -435,3 +435,44 @@ Status: Completed
 
 #### Next step after completion
 - Step 10 — Multilingual pipeline
+
+### Step 10 — Multilingual pipeline
+Status: Completed
+
+#### Delivered
+- Multilingual fields added to `raw_evidence`
+- Multilingual schemas added
+- Multilingual service added
+- Run multilingual APIs added
+- Deterministic script detection, language resolution, and family mapping added
+- Bridge text generation added for downstream analysis readiness
+- Alembic migration for multilingual fields added
+- Tests added for multilingual flow and evidence output
+- Tracker updated to note that live public-source scraper implementation is deferred to a later phase
+
+#### Implemented files
+- `apps/api/app/models/raw_evidence.py`
+- `apps/api/app/schemas/evidence.py`
+- `apps/api/app/services/scrape_executor.py`
+- `apps/api/app/services/normalization.py`
+- `apps/api/app/schemas/multilingual.py`
+- `apps/api/app/services/multilingual.py`
+- `apps/api/app/api/v1/multilingual.py`
+- `apps/api/app/api/v1/router.py`
+- `apps/api/alembic/versions/0006_raw_evidence_multilingual_fields.py`
+- `apps/api/tests/test_multilingual.py`
+
+#### Test notes
+- Alembic migration for multilingual fields passes
+- Pytest: 16 tests passing
+- Multilingual endpoints visible in Swagger
+- Run multilingual flow works correctly
+- Multilingual fields appear in evidence responses
+
+#### Known issues
+- Multilingual processing is deterministic and non-LLM in this step
+- Live public-source scrapers are still deferred and current scrapers remain deterministic stubs
+- No true translation layer yet; bridge text is preparation for later stages
+
+#### Next step after completion
+- Step 11 — Multi-agent intelligence
