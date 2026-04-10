@@ -396,3 +396,42 @@ Status: Completed
 
 #### Next step after completion
 - Step 9 — Cleaning and normalization foundation
+
+### Step 9 — Cleaning and normalization foundation
+Status: Completed
+
+#### Delivered
+- Normalization fields added to `raw_evidence`
+- Normalization schemas added
+- Normalization service added
+- Run normalization APIs added
+- Scrape execution now initializes normalization-ready evidence rows
+- Deterministic text cleanup, language fallback, and hashing added
+- Alembic migration for normalization fields added
+- Tests added for normalization flow and evidence output
+
+#### Implemented files
+- `apps/api/app/models/raw_evidence.py`
+- `apps/api/app/schemas/evidence.py`
+- `apps/api/app/api/v1/evidence.py`
+- `apps/api/app/services/scrape_executor.py`
+- `apps/api/app/schemas/normalization.py`
+- `apps/api/app/services/normalization.py`
+- `apps/api/app/api/v1/normalization.py`
+- `apps/api/app/api/v1/router.py`
+- `apps/api/alembic/versions/0005_raw_evidence_normalization_fields.py`
+- `apps/api/tests/test_normalization.py`
+
+#### Test notes
+- Alembic migration for normalization fields passes
+- Pytest: 14 tests passing
+- Normalization endpoints visible in Swagger
+- Run normalization flow works correctly
+- Normalized fields appear in evidence responses
+
+#### Known issues
+- Normalization is deterministic and English-first in this step
+- No translation or advanced language-specific normalization yet
+
+#### Next step after completion
+- Step 10 — Multilingual pipeline
