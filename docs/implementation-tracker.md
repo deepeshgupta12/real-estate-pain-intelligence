@@ -633,3 +633,42 @@ Status: Completed
 
 #### Next step after completion
 - Step 15 — Export system
+
+### Step 15 — Export system
+Status: Completed
+
+#### Delivered
+- `export_jobs` model added
+- Export schemas added
+- Export service added
+- Export job generation API added
+- Export job listing API added
+- Export mark-completed and mark-failed APIs added
+- Alembic migration for export jobs added
+- Tests added for export flow
+
+#### Implemented files
+- `apps/api/app/models/export_job.py`
+- `apps/api/app/models/__init__.py`
+- `apps/api/app/db/models.py`
+- `apps/api/app/schemas/export.py`
+- `apps/api/app/services/export.py`
+- `apps/api/app/api/v1/export.py`
+- `apps/api/app/api/v1/router.py`
+- `apps/api/alembic/versions/0011_export_jobs_table.py`
+- `apps/api/tests/test_export.py`
+
+#### Test notes
+- Alembic migration for export jobs passes
+- Pytest: 21 tests passing
+- Export endpoints visible in Swagger
+- Export job generation works correctly
+- Export mark-completed flow works correctly
+
+#### Known issues
+- Export system is API-driven and simulated in this step
+- No real file-generation pipeline yet
+- Live public-source scrapers are still deferred and current scrapers remain deterministic stubs
+
+#### Next step after completion
+- Step 16 — Final hardening
