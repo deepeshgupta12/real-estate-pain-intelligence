@@ -38,6 +38,18 @@ class RawEvidence(Base):
         index=True,
     )
     normalization_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    resolved_language: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    language_family: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    script_label: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    multilingual_status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="pending",
+        server_default="pending",
+        index=True,
+    )
+    multilingual_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    bridge_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     language: Mapped[str | None] = mapped_column(String(50), nullable=True)
     is_relevant: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
