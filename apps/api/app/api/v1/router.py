@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.v1.evidence import router as evidence_router
 from app.api.v1.health import router as health_router
+from app.api.v1.intelligence import router as intelligence_router
 from app.api.v1.meta import router as meta_router
 from app.api.v1.multilingual import router as multilingual_router
 from app.api.v1.normalization import router as normalization_router
@@ -22,3 +23,4 @@ api_router.include_router(scrape_execution_router)
 api_router.include_router(run_events_router)
 api_router.include_router(normalization_router)
 api_router.include_router(multilingual_router)
+api_router.include_router(intelligence_router)
