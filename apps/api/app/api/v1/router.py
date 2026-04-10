@@ -6,6 +6,7 @@ from app.api.v1.human_review import router as human_review_router
 from app.api.v1.intelligence import router as intelligence_router
 from app.api.v1.meta import router as meta_router
 from app.api.v1.multilingual import router as multilingual_router
+from app.api.v1.notion_sync import router as notion_sync_router
 from app.api.v1.normalization import router as normalization_router
 from app.api.v1.orchestrator import router as orchestrator_router
 from app.api.v1.retrieval import router as retrieval_router
@@ -28,3 +29,4 @@ api_router.include_router(multilingual_router)
 api_router.include_router(intelligence_router)
 api_router.include_router(retrieval_router)
 api_router.include_router(human_review_router)
+api_router.include_router(notion_sync_router)

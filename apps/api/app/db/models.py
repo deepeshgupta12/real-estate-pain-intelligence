@@ -1,5 +1,6 @@
 from app.models.agent_insight import AgentInsight
 from app.models.human_review_item import HumanReviewItem
+from app.models.notion_sync_job import NotionSyncJob
 from app.models.raw_evidence import RawEvidence
 from app.models.retrieval_document import RetrievalDocument
 from app.models.run_event import RunEvent
@@ -14,4 +15,5 @@ __all__ = [
     "AgentInsight",
     "RetrievalDocument",
     "HumanReviewItem",
+    "NotionSyncJob",
 ]

@@ -21,6 +21,7 @@ Real Estate Pain Point Intelligence Platform
 - CSV/JSON/PDF exports
 - Highly polished frontend from day one
 - No authentication in V1
+- Live public-source scraper implementation is intentionally deferred to a later phase; current source scrapers remain deterministic stubs until that phase
 
 ## Phase Plan
 1. Foundation and skeleton
@@ -593,3 +594,42 @@ Status: Completed
 
 #### Next step after completion
 - Step 14 — Notion integration
+
+### Step 14 — Notion integration
+Status: Completed
+
+#### Delivered
+- `notion_sync_jobs` model added
+- Notion sync schemas added
+- Notion sync service added
+- Notion sync job generation API added
+- Notion sync job listing API added
+- Notion sync mark-synced and mark-failed APIs added
+- Alembic migration for notion sync jobs added
+- Tests added for notion sync flow
+
+#### Implemented files
+- `apps/api/app/models/notion_sync_job.py`
+- `apps/api/app/models/__init__.py`
+- `apps/api/app/db/models.py`
+- `apps/api/app/schemas/notion_sync.py`
+- `apps/api/app/services/notion_sync.py`
+- `apps/api/app/api/v1/notion_sync.py`
+- `apps/api/app/api/v1/router.py`
+- `apps/api/alembic/versions/0010_notion_sync_jobs_table.py`
+- `apps/api/tests/test_notion_sync.py`
+
+#### Test notes
+- Alembic migration for notion sync jobs passes
+- Pytest: 20 tests passing
+- Notion sync endpoints visible in Swagger
+- Notion sync job generation works correctly
+- Notion sync mark-synced flow works correctly
+
+#### Known issues
+- Notion integration is API-driven and simulated in this step
+- No real Notion API connector yet
+- Live public-source scrapers are still deferred and current scrapers remain deterministic stubs
+
+#### Next step after completion
+- Step 15 — Export system
