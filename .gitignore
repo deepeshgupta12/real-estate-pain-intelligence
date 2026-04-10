@@ -1,0 +1,38 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.venv/
+
+# Node
+node_modules/
+.next/
+out/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build / logs
+dist/
+build/
+coverage/
+
+# Data artifacts
+data/raw/*
+data/processed/*
+data/exports/*
+
+# Keep directories
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/exports/.gitkeep
