@@ -22,10 +22,14 @@ def create_scrape_run(
         source_name=payload.source_name,
         target_brand=payload.target_brand,
         status=payload.status,
+        pipeline_stage=payload.pipeline_stage,
+        trigger_mode=payload.trigger_mode,
         items_discovered=payload.items_discovered,
         items_processed=payload.items_processed,
         error_message=payload.error_message,
+        orchestrator_notes=payload.orchestrator_notes,
         started_at=payload.started_at,
+        last_heartbeat_at=payload.last_heartbeat_at,
         completed_at=payload.completed_at,
     )
     db.add(run)
@@ -36,9 +40,7 @@ def create_scrape_run(
 
 @router.get("", response_model=list[ScrapeRunResponse])
 def list_scrape_runs(db: Session = Depends(get_db)) -> list[ScrapeRun]:
-    runs = db.scalars(
-        select(ScrapeRun).order_by(ScrapeRun.id.desc())
-    ).all()
+    runs = db.scalars(select(ScrapeRun).order_by(ScrapeRun.id.desc())).all()
     return list(runs)
 
 

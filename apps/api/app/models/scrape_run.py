@@ -17,10 +17,25 @@ class ScrapeRun(Base):
     source_name: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     target_brand: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="created")
+    pipeline_stage: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="created",
+        server_default="created",
+        index=True,
+    )
+    trigger_mode: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="manual",
+        server_default="manual",
+    )
     items_discovered: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     items_processed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    orchestrator_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
