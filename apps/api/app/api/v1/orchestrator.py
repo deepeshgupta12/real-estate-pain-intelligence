@@ -6,8 +6,8 @@ from app.schemas.orchestrator import (
     OrchestratorDispatchResponse,
     OrchestratorFailRequest,
     OrchestratorProgressRequest,
+    RunQueueSummaryResponse,
 )
-from app.schemas.run import ScrapeRunResponse
 from app.services.orchestrator import OrchestratorService
 
 router = APIRouter(prefix="/orchestrator", tags=["orchestrator"])
@@ -108,6 +108,20 @@ def fail_run(
     )
 
 
-@router.get("/queue", response_model=list[ScrapeRunResponse])
-def list_active_queue(db: Session = Depends(get_db)) -> list[ScrapeRunResponse]:
-    return OrchestratorService.list_active_queue(db)
+@router.get("/queue", response_model=list[RunQueueSummaryResponse])
+def list_active_queue(db: Session = Depends(get_db)) -> list[RunQueueSummaryResponse]:
+    runs = OrchestratorService.list_active_queue(db)
+    return [
+        RunQueueSummaryResponse(
+            run_id=run.id,
+            source_name=run.source_name,
+            target_brand=run.target_brand,
+            status=run.status,
+            pipeline_stage=run.pipeline_stage,
+            items_discovered=run.items_discovered,
+            items_processed=run.items_processed,
+            last_heartbeat_at=run.last_heartbeat_at,
+            orchestrator_notes=run.orchestrator_notes,
+        )
+        for run in runs
+    ]

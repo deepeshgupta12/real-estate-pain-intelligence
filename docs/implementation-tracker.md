@@ -311,3 +311,88 @@ Status: Completed
 
 #### Next step after completion
 - Step 7 — Source scraper foundation
+
+### Step 7 — Source scraper foundation
+Status: Completed
+
+#### Delivered
+- Generic scraper interface added
+- Source-specific scraper modules added for Reddit, YouTube, app reviews, X, and review sites
+- Scraper registry added for supported source resolution
+- Scrape execution service added
+- Scrape execution endpoints added
+- Automatic evidence persistence from scraper outputs added
+- Source listing endpoint added
+- Tests added for source listing and scrape execution flows
+
+#### Implemented files
+- `apps/api/app/scrapers/__init__.py`
+- `apps/api/app/scrapers/base.py`
+- `apps/api/app/scrapers/registry.py`
+- `apps/api/app/scrapers/types.py`
+- `apps/api/app/scrapers/sources/__init__.py`
+- `apps/api/app/scrapers/sources/reddit.py`
+- `apps/api/app/scrapers/sources/youtube.py`
+- `apps/api/app/scrapers/sources/app_reviews.py`
+- `apps/api/app/scrapers/sources/x_posts.py`
+- `apps/api/app/scrapers/sources/review_sites.py`
+- `apps/api/app/services/scrape_executor.py`
+- `apps/api/app/api/v1/scrape_execution.py`
+- `apps/api/app/schemas/scrape_execution.py`
+- `apps/api/app/api/v1/router.py`
+- `apps/api/tests/test_scrape_execution.py`
+
+#### Test notes
+- Pytest: 10 tests passing
+- Supported source listing endpoint works
+- Scrape execution endpoint works
+- Evidence is auto-persisted after execution
+- Swagger shows scrape-execution routes correctly
+
+#### Known issues
+- Scrapers are deterministic stub implementations in this step
+- No live external scraping, retries, or rate-limit handling yet
+
+#### Next step after completion
+- Step 8 — Streaming pipeline
+
+### Step 8 — Streaming pipeline
+Status: Completed
+
+#### Delivered
+- `run_events` model added
+- Run event schemas added
+- Run event service added
+- Run event APIs added
+- Orchestrator transitions now persist timeline events
+- Queue response was refined for streaming-style summaries
+- Alembic migration for run events table added
+- Tests added for event creation and retrieval flows
+
+#### Implemented files
+- `apps/api/app/models/run_event.py`
+- `apps/api/app/models/__init__.py`
+- `apps/api/app/db/models.py`
+- `apps/api/app/schemas/run_event.py`
+- `apps/api/app/services/run_events.py`
+- `apps/api/app/services/orchestrator.py`
+- `apps/api/app/api/v1/run_events.py`
+- `apps/api/app/schemas/orchestrator.py`
+- `apps/api/app/api/v1/orchestrator.py`
+- `apps/api/app/api/v1/router.py`
+- `apps/api/alembic/versions/0004_run_events_table.py`
+- `apps/api/tests/test_run_events.py`
+
+#### Test notes
+- Alembic migration for run events passes
+- Pytest: 12 tests passing
+- Run-events endpoints visible in Swagger
+- Run events are persisted during orchestration flow
+- Run timeline retrieval works correctly
+
+#### Known issues
+- Event pipeline is persisted and queryable but not yet pushed over WebSockets/SSE
+- Frontend is not yet consuming run event streams
+
+#### Next step after completion
+- Step 9 — Cleaning and normalization foundation

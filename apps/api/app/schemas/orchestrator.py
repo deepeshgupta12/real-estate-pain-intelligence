@@ -26,3 +26,15 @@ class OrchestratorProgressRequest(BaseModel):
 class OrchestratorFailRequest(BaseModel):
     error_message: str = Field(..., min_length=1)
     orchestrator_notes: str | None = None
+
+
+class RunQueueSummaryResponse(BaseModel):
+    run_id: int
+    source_name: str
+    target_brand: str
+    status: str
+    pipeline_stage: str
+    items_discovered: int
+    items_processed: int
+    last_heartbeat_at: datetime | None
+    orchestrator_notes: str | None
