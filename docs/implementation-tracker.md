@@ -672,3 +672,43 @@ Status: Completed
 
 #### Next step after completion
 - Step 16 — Final hardening
+
+### Step 16 — Final hardening
+Status: Completed
+
+#### Delivered
+- Final hardening service added for cross-pipeline validation and readiness checks
+- Run readiness API added
+- System overview API added
+- Guardrails added to prevent downstream stages from running without prerequisites
+- Export generation now blocks when no evidence exists
+- Retrieval indexing now blocks when evidence or intelligence outputs are missing
+- Human review generation now blocks when insights are missing
+- Notion sync generation now blocks when approved review items are missing
+- Tests added for readiness summary and downstream guardrails
+
+#### Implemented files
+- `apps/api/app/services/final_hardening.py`
+- `apps/api/app/schemas/final_hardening.py`
+- `apps/api/app/api/v1/final_hardening.py`
+- `apps/api/app/services/retrieval.py`
+- `apps/api/app/services/human_review.py`
+- `apps/api/app/services/notion_sync.py`
+- `apps/api/app/services/export.py`
+- `apps/api/app/api/v1/router.py`
+- `apps/api/tests/test_final_hardening.py`
+
+#### Test notes
+- Pytest passes with final hardening coverage added
+- Final-hardening endpoints visible in Swagger
+- Run readiness summary works correctly
+- System overview works correctly
+- Downstream guardrails correctly block invalid pipeline transitions
+
+#### Known issues
+- Live public-source scrapers are still deferred and current scrapers remain deterministic stubs
+- Final hardening is API/backend focused; no dedicated frontend operational console yet
+- Export and Notion flows remain simulated and do not yet call real external services
+
+#### Next step after completion
+- Locked V1 backend scope completed

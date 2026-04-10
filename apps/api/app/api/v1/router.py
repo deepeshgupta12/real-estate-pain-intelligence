@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.v1.evidence import router as evidence_router
 from app.api.v1.export import router as export_router
+from app.api.v1.final_hardening import router as final_hardening_router
 from app.api.v1.health import router as health_router
 from app.api.v1.human_review import router as human_review_router
 from app.api.v1.intelligence import router as intelligence_router
@@ -32,3 +33,4 @@ api_router.include_router(retrieval_router)
 api_router.include_router(human_review_router)
 api_router.include_router(notion_sync_router)
 api_router.include_router(export_router)
+api_router.include_router(final_hardening_router)

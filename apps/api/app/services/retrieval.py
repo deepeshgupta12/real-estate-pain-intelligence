@@ -8,6 +8,7 @@ from app.models.agent_insight import AgentInsight
 from app.models.raw_evidence import RawEvidence
 from app.models.retrieval_document import RetrievalDocument
 from app.models.scrape_run import ScrapeRun
+from app.services.final_hardening import FinalHardeningService
 from app.services.orchestrator import OrchestratorService
 
 
@@ -55,7 +56,9 @@ class RetrievalService:
 
     @staticmethod
     def index_run(db: Session, run_id: int) -> tuple[ScrapeRun, int]:
-        run = OrchestratorService.get_run_or_404(db, run_id)
+        run = FinalHardeningService.ensure_run_not_failed(db, run_id)
+        FinalHardeningService.ensure_evidence_exists(db, run_id)
+        FinalHardeningService.ensure_insights_exist(db, run_id)
 
         evidence_items = db.scalars(
             select(RawEvidence)

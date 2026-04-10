@@ -7,13 +7,15 @@ from sqlalchemy.orm import Session
 from app.models.human_review_item import HumanReviewItem
 from app.models.notion_sync_job import NotionSyncJob
 from app.models.scrape_run import ScrapeRun
+from app.services.final_hardening import FinalHardeningService
 from app.services.orchestrator import OrchestratorService
 
 
 class NotionSyncService:
     @staticmethod
     def generate_sync_jobs(db: Session, run_id: int) -> tuple[ScrapeRun, int]:
-        run = OrchestratorService.get_run_or_404(db, run_id)
+        run = FinalHardeningService.ensure_run_not_failed(db, run_id)
+        FinalHardeningService.ensure_approved_reviews_exist(db, run_id)
 
         review_items = db.scalars(
             select(HumanReviewItem)
