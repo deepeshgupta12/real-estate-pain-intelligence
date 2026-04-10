@@ -148,3 +148,44 @@ Status: Completed
 
 #### Next step after completion
 - Step 3 — Polished frontend application shell
+
+### Step 3 — Polished frontend application shell
+Status: Completed
+
+#### Delivered
+- Frontend app shell layout added
+- Sidebar navigation added
+- Top header added
+- Richer dashboard hero section added
+- Overview stat cards added
+- Product scope and surface preview cards added
+- Pipeline preview cards added
+- API meta integration added on frontend
+- Frontend shell upgraded into a product-style dashboard structure
+
+#### Implemented files
+- `apps/web/src/types/navigation.ts`
+- `apps/web/src/components/ui/app-chip.tsx`
+- `apps/web/src/components/app-shell/sidebar.tsx`
+- `apps/web/src/components/app-shell/topbar.tsx`
+- `apps/web/src/components/dashboard/hero-banner.tsx`
+- `apps/web/src/components/dashboard/overview-stat-card.tsx`
+- `apps/web/src/components/dashboard/nav-preview-card.tsx`
+- `apps/web/src/components/dashboard/pipeline-stage-card.tsx`
+- `apps/web/src/lib/api.ts`
+- `apps/web/src/app/globals.css`
+- `apps/web/src/app/layout.tsx`
+- `apps/web/src/app/page.tsx`
+- `apps/web/package.json`
+
+#### Test notes
+- Frontend loads successfully with polished app shell
+- Backend-connected status, environment, and version render in UI
+- Lint passes successfully
+
+#### Known issues
+- Sidebar is optimized for larger screens only in this step
+- Navigation is presentational only in this step
+
+#### Next step after completion
+- Step 4 — Database foundation
