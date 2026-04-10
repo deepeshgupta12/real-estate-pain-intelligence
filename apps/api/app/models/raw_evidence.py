@@ -28,6 +28,16 @@ class RawEvidence(Base):
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     raw_text: Mapped[str] = mapped_column(Text, nullable=False)
     cleaned_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    normalized_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    normalized_language: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    normalization_status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="pending",
+        server_default="pending",
+        index=True,
+    )
+    normalization_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     language: Mapped[str | None] = mapped_column(String(50), nullable=True)
     is_relevant: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
