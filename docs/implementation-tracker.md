@@ -554,3 +554,42 @@ Status: Completed
 
 #### Next step after completion
 - Step 13 — Human review
+
+### Step 13 — Human review
+Status: Completed
+
+#### Delivered
+- `human_review_queue` model added
+- Human review schemas added
+- Human review service added
+- Review queue generation API added
+- Review queue listing API added
+- Review approve and reject APIs added
+- Alembic migration for human review queue added
+- Tests added for human review flow
+
+#### Implemented files
+- `apps/api/app/models/human_review_item.py`
+- `apps/api/app/models/__init__.py`
+- `apps/api/app/db/models.py`
+- `apps/api/app/schemas/human_review.py`
+- `apps/api/app/services/human_review.py`
+- `apps/api/app/api/v1/human_review.py`
+- `apps/api/app/api/v1/router.py`
+- `apps/api/alembic/versions/0009_human_review_queue_table.py`
+- `apps/api/tests/test_human_review.py`
+
+#### Test notes
+- Alembic migration for human review queue passes
+- Pytest: 19 tests passing
+- Human review endpoints visible in Swagger
+- Review queue generation works correctly
+- Review approval flow works correctly
+
+#### Known issues
+- Human review is API-driven only in this step
+- No dedicated frontend review console yet
+- Live public-source scrapers are still deferred and current scrapers remain deterministic stubs
+
+#### Next step after completion
+- Step 14 — Notion integration
