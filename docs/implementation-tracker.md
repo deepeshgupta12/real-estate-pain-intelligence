@@ -515,3 +515,42 @@ Status: Completed
 
 #### Next step after completion
 - Step 12 — Vector retrieval
+
+### Step 12 — Vector retrieval
+Status: Completed
+
+#### Delivered
+- `retrieval_documents` model added
+- Retrieval schemas added
+- Retrieval service added
+- Run retrieval indexing API added
+- Retrieval search API added
+- Deterministic token-based relevance scoring added
+- Alembic migration for retrieval documents table added
+- Tests added for retrieval indexing and search flow
+
+#### Implemented files
+- `apps/api/app/models/retrieval_document.py`
+- `apps/api/app/models/__init__.py`
+- `apps/api/app/db/models.py`
+- `apps/api/app/schemas/retrieval.py`
+- `apps/api/app/services/retrieval.py`
+- `apps/api/app/api/v1/retrieval.py`
+- `apps/api/app/api/v1/router.py`
+- `apps/api/alembic/versions/0008_retrieval_documents_table.py`
+- `apps/api/tests/test_retrieval.py`
+
+#### Test notes
+- Alembic migration for retrieval documents passes
+- Pytest: 18 tests passing
+- Retrieval endpoints visible in Swagger
+- Retrieval indexing flow works correctly
+- Retrieval search returns scored results
+
+#### Known issues
+- Retrieval is deterministic and token-based in this step
+- No embeddings or external vector database yet
+- Live public-source scrapers are still deferred and current scrapers remain deterministic stubs
+
+#### Next step after completion
+- Step 13 — Human review
