@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: repi-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: repi_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5460:5432"
+    volumes:
+      - repi_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  repi_postgres_data:

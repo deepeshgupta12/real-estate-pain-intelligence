@@ -2,14 +2,16 @@
 name = "real-estate-pain-intelligence-api"
 version = "0.1.0"
 description = "Backend API for the Real Estate Pain Point Intelligence Platform"
-readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
   "fastapi>=0.115.0",
   "uvicorn[standard]>=0.30.0",
   "pydantic-settings>=2.4.0",
   "httpx>=0.27.0",
-  "pytest>=8.3.0"
+  "pytest>=8.3.0",
+  "sqlalchemy>=2.0.35",
+  "alembic>=1.13.2",
+  "psycopg[binary]>=3.2.1"
 ]
 
 [build-system]

@@ -1,9 +1,11 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from sqlalchemy import text
 
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
+from app.db.session import engine
 
 
 @asynccontextmanager
@@ -18,6 +20,13 @@ async def lifespan(app: FastAPI):
         settings.app_env,
         settings.app_version,
     )
+
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        logger.info("Database connection check succeeded")
+    except Exception as exc:
+        logger.warning("Database connection check failed: %s", exc)
 
     yield
 
