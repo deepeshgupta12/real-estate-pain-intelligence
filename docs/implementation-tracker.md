@@ -476,3 +476,42 @@ Status: Completed
 
 #### Next step after completion
 - Step 11 — Multi-agent intelligence
+
+### Step 11 — Multi-agent intelligence
+Status: Completed
+
+#### Delivered
+- `agent_insights` model added
+- Agent insight schemas added
+- Multi-agent intelligence service added
+- Run intelligence APIs added
+- Deterministic outputs added for journey stage, pain point, taxonomy cluster, root cause, competitor label, priority, and action recommendation
+- Alembic migration for agent insights table added
+- Tests added for intelligence flow and insight retrieval
+
+#### Implemented files
+- `apps/api/app/models/agent_insight.py`
+- `apps/api/app/models/__init__.py`
+- `apps/api/app/db/models.py`
+- `apps/api/app/schemas/agent_insight.py`
+- `apps/api/app/schemas/intelligence.py`
+- `apps/api/app/services/intelligence.py`
+- `apps/api/app/api/v1/intelligence.py`
+- `apps/api/app/api/v1/router.py`
+- `apps/api/alembic/versions/0007_agent_insights_table.py`
+- `apps/api/tests/test_intelligence.py`
+
+#### Test notes
+- Alembic migration for agent insights passes
+- Pytest: 17 tests passing
+- Intelligence endpoints visible in Swagger
+- Run intelligence flow works correctly
+- Insight fields appear in intelligence responses
+
+#### Known issues
+- Intelligence layer is deterministic and non-LLM in this step
+- Live public-source scrapers are still deferred and current scrapers remain deterministic stubs
+- OpenAI-powered hybrid extraction, clustering, and recommendation logic will come later
+
+#### Next step after completion
+- Step 12 — Vector retrieval
