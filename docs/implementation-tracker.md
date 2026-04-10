@@ -233,3 +233,45 @@ Status: Completed
 
 #### Next step after completion
 - Step 5 — Evidence and run models
+
+### Step 5 — Evidence and run models
+Status: Completed
+
+#### Delivered
+- `scrape_runs` model added
+- `raw_evidence` model added
+- Alembic migration for runs and evidence added
+- Run create/list/get endpoints added
+- Evidence create/list/get endpoints added
+- DB-backed schemas for runs and evidence added
+- API router expanded with run and evidence routes
+- Endpoint tests added for runs and evidence
+
+#### Implemented files
+- `apps/api/app/models/__init__.py`
+- `apps/api/app/models/scrape_run.py`
+- `apps/api/app/models/raw_evidence.py`
+- `apps/api/app/db/models.py`
+- `apps/api/app/schemas/common.py`
+- `apps/api/app/schemas/run.py`
+- `apps/api/app/schemas/evidence.py`
+- `apps/api/app/api/v1/runs.py`
+- `apps/api/app/api/v1/evidence.py`
+- `apps/api/app/api/v1/router.py`
+- `apps/api/alembic/versions/0002_create_scrape_runs_and_raw_evidence.py`
+- `apps/api/tests/test_runs.py`
+- `apps/api/tests/test_evidence.py`
+
+#### Test notes
+- Alembic migration for scrape runs and raw evidence passes
+- Pytest: 6 tests passing
+- Run endpoints working
+- Evidence endpoints working
+- Swagger shows new routes correctly
+
+#### Known issues
+- Evidence layer currently stores only raw ingestion-level data
+- No cleaning, enrichment, or multilingual normalization yet
+
+#### Next step after completion
+- Step 6 — Orchestrator foundation
