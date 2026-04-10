@@ -275,3 +275,39 @@ Status: Completed
 
 #### Next step after completion
 - Step 6 — Orchestrator foundation
+
+### Step 6 — Orchestrator foundation
+Status: Completed
+
+#### Delivered
+- Orchestration fields added to `scrape_runs`
+- Orchestrator service added for state transitions
+- Dispatch, start, progress, complete, and fail endpoints added
+- Active queue endpoint added
+- Alembic migration for orchestration fields added
+- Tests added for orchestrator lifecycle flows
+
+#### Implemented files
+- `apps/api/app/models/scrape_run.py`
+- `apps/api/app/schemas/run.py`
+- `apps/api/app/schemas/orchestrator.py`
+- `apps/api/app/services/orchestrator.py`
+- `apps/api/app/api/v1/runs.py`
+- `apps/api/app/api/v1/orchestrator.py`
+- `apps/api/app/api/v1/router.py`
+- `apps/api/alembic/versions/0003_run_orchestration_fields.py`
+- `apps/api/tests/test_orchestrator.py`
+
+#### Test notes
+- Alembic migration for orchestration fields passes
+- Pytest: 8 tests passing
+- Orchestrator endpoints visible in Swagger
+- Queue endpoint works
+- Run lifecycle transitions work correctly
+
+#### Known issues
+- Orchestration is synchronous and API-driven in this step
+- No background worker or streaming events yet
+
+#### Next step after completion
+- Step 7 — Source scraper foundation
