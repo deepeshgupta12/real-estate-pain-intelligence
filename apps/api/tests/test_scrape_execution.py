@@ -41,8 +41,16 @@ def test_execute_scrape_run_persists_evidence() -> None:
     assert execute_payload["status"] == "completed"
     assert execute_payload["pipeline_stage"] == "completed"
     assert execute_payload["persisted_evidence_count"] >= 1
+    assert "deduplicated_count" in execute_payload
 
     evidence_response = client.get("/api/v1/evidence")
     assert evidence_response.status_code == 200
     evidence_items = evidence_response.json()
     assert len(evidence_items) >= 1
+
+    latest_item = evidence_items[0]
+    assert latest_item["fetched_at"] is not None
+    assert latest_item["source_query"] is not None
+    assert latest_item["parser_version"] is not None
+    assert latest_item["dedupe_key"] is not None
+    assert isinstance(latest_item["raw_payload_json"], dict)

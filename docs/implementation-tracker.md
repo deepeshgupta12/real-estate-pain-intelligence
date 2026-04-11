@@ -795,3 +795,46 @@ Status: Completed
 
 #### Next step after completion
 - Step 18 — Remaining live source connectors
+
+### Step 18 — Remaining live source connectors
+Status: Completed
+
+#### Delivered
+- Live-capable YouTube connector foundation added
+- Live-capable app reviews connector foundation added
+- Live-capable public social fallback connector added for X-constrained scenarios
+- Live-capable review sites connector foundation added
+- Shared scraper HTTP client extended to support text fetches in addition to JSON fetches
+- Shared scraper utility layer expanded with HTML stripping and slug generation helpers
+- All remaining source connectors now follow retry/fallback/live-or-stub execution patterns
+- Tests added for YouTube, app reviews, public social fallback, and review-site live parsing flows
+
+#### Implemented files
+- `apps/api/app/core/config.py`
+- `apps/api/.env.example`
+- `apps/api/.env`
+- `apps/api/app/scrapers/http_client.py`
+- `apps/api/app/scrapers/utils.py`
+- `apps/api/app/scrapers/sources/youtube.py`
+- `apps/api/app/scrapers/sources/app_reviews.py`
+- `apps/api/app/scrapers/sources/x_posts.py`
+- `apps/api/app/scrapers/sources/review_sites.py`
+- `apps/api/tests/test_youtube_live_scraper.py`
+- `apps/api/tests/test_app_reviews_live_scraper.py`
+- `apps/api/tests/test_x_live_scraper.py`
+- `apps/api/tests/test_review_sites_live_scraper.py`
+
+#### Test notes
+- Pytest passes with Step 18 connector coverage added
+- YouTube live parsing behavior works in tests
+- App reviews live parsing behavior works in tests
+- Public social fallback parsing behavior works in tests
+- Review sites live parsing behavior works in tests
+
+#### Known issues
+- YouTube and review-site parsing still depend on brittle public-page structures and may need provider-specific strengthening in later iterations
+- X direct access is still constrained, so the connector uses a public social fallback strategy rather than official X ingestion
+- Live scraper reliability will continue improving as observability and diagnostics are added in later V2 steps
+
+#### Next step after completion
+- Step 19 — Real export generation

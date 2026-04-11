@@ -10,4 +10,5 @@ class ScrapeExecutionResponse(BaseModel):
     items_discovered: int
     items_processed: int
     persisted_evidence_count: int
+    deduplicated_count: int
     orchestrator_notes: str | None
