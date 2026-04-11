@@ -57,6 +57,9 @@ def mark_export_job_completed(
         export_job_id=export_job_id,
         file_name=payload.file_name,
         file_path=payload.file_path,
+        file_size_bytes=payload.file_size_bytes,
+        row_count=payload.row_count,
+        artifact_metadata_json=payload.artifact_metadata_json,
         export_notes=payload.export_notes,
     )
 

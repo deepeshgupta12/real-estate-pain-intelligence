@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     scraper_public_social_search_base_url: str = "https://hn.algolia.com/api/v1/search"
     scraper_review_sites_base_url: str = "https://www.trustpilot.com/review"
 
+    export_output_dir: str = "./generated_exports"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

@@ -838,3 +838,51 @@ Status: Completed
 
 #### Next step after completion
 - Step 19 — Real export generation
+
+### Step 19 — Real export generation
+Status: Completed
+
+#### Delivered
+- Real CSV export generation added
+- Real JSON export generation added
+- Real PDF export generation added
+- Run-level export packaging added for:
+  - raw evidence
+  - normalized and multilingual-ready evidence fields
+  - agent insights
+  - retrieval documents
+  - human review items
+  - notion sync jobs
+- Export output directory setting added
+- Export artifact metadata fields added to export jobs
+- File path, file size, generated timestamp, and row-count persistence added
+- PDF executive summary generation added
+- Export generation now produces real completed artifacts instead of simulated jobs
+- Export test coverage updated for real artifact validation
+
+#### Implemented files
+- `apps/api/app/core/config.py`
+- `apps/api/pyproject.toml`
+- `apps/api/app/models/export_job.py`
+- `apps/api/app/schemas/export.py`
+- `apps/api/app/services/export.py`
+- `apps/api/app/api/v1/export.py`
+- `apps/api/alembic/versions/0013_export_artifact_metadata.py`
+- `apps/api/tests/test_export.py`
+
+#### Test notes
+- Alembic migration for export artifact metadata passes
+- Pytest passes with real export coverage added
+- CSV export artifact generation works correctly
+- JSON export artifact generation works correctly
+- PDF executive summary export generation works correctly
+- Export jobs now persist real file paths and artifact metadata
+- Generated files are present on disk and validated in tests
+
+#### Known issues
+- Export artifacts are generated locally on disk and are not yet uploaded to object storage
+- Signed URL support is not yet implemented
+- PDF layout is clean and usable but still lightweight; richer branded formatting can be improved later
+
+#### Next step after completion
+- Step 20 — Real Notion integration
