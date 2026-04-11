@@ -1,12 +1,24 @@
 import hashlib
 import json
 import re
+from html import unescape
 from typing import Any
 
 
 def normalize_whitespace(text: str) -> str:
     normalized = text.replace("\n", " ").replace("\r", " ").strip()
     return re.sub(r"\s+", " ", normalized)
+
+
+def strip_html_tags(text: str) -> str:
+    text_without_tags = re.sub(r"<[^>]+>", " ", text)
+    return normalize_whitespace(unescape(text_without_tags))
+
+
+def slugify_identifier(value: str) -> str:
+    value = value.strip().lower()
+    value = re.sub(r"[^a-z0-9]+", "-", value)
+    return value.strip("-")
 
 
 def build_dedupe_key(
