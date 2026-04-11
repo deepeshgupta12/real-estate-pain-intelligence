@@ -8,6 +8,7 @@ from app.models.agent_insight import AgentInsight
 from app.models.export_job import ExportJob
 from app.models.raw_evidence import RawEvidence
 from app.models.scrape_run import ScrapeRun
+from app.services.final_hardening import FinalHardeningService
 from app.services.orchestrator import OrchestratorService
 
 
@@ -16,7 +17,8 @@ class ExportService:
 
     @staticmethod
     def generate_export_jobs(db: Session, run_id: int, export_formats: list[str]) -> tuple[ScrapeRun, int]:
-        run = OrchestratorService.get_run_or_404(db, run_id)
+        run = FinalHardeningService.ensure_run_not_failed(db, run_id)
+        FinalHardeningService.ensure_evidence_exists(db, run_id)
 
         cleaned_formats: list[str] = []
         for fmt in export_formats:
