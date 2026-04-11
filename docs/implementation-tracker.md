@@ -712,3 +712,86 @@ Status: Completed
 
 #### Next step after completion
 - Locked V1 backend scope completed
+
+---
+
+## Locked Scope — V2
+- Real live scraper implementation
+- Real export generation
+- Real Notion integration
+- Embedding-based retrieval
+- LLM-assisted intelligence layer
+- Review console backend readiness
+- Pipeline observability and run diagnostics
+- Full frontend product console
+- Multi-tenant architecture
+
+## Explicitly Out of V2 Scope
+- Advanced clustering/topic modeling beyond practical need
+- Automated agent orchestration with many LLM agents talking to each other
+
+## V2 Phase Plan
+17. Real ingestion foundation + first live connector
+18. Remaining live source connectors
+19. Real export generation
+20. Real Notion integration
+21. Embedding retrieval foundation
+22. Hybrid LLM-assisted intelligence
+23. Review console backend readiness
+24. Pipeline observability and diagnostics
+25. Full frontend product console
+26. Multi-tenant architecture foundation
+
+### Step 17 — Real ingestion foundation + first live connector
+Status: Completed
+
+#### Delivered
+- Live-capable scraper settings added
+- Shared scraper HTTP client added
+- Scraper utility helpers added
+- Real-ingestion metadata fields added to `raw_evidence`
+- Source query, fetch timestamp, parser version, dedupe key, and raw payload snapshot persistence added
+- Evidence API updated to support ingestion metadata fields
+- Legacy evidence compatibility handling added for newly introduced JSON payload field
+- Source-level deduplication support added in scrape execution flow
+- Scrape execution response updated with deduplication-aware output
+- First live connector foundation added for Reddit public ingestion
+- Tests added for Reddit live scraper behavior and ingestion metadata flow
+
+#### Implemented files
+- `apps/api/app/core/config.py`
+- `apps/api/.env.example`
+- `apps/api/.env`
+- `apps/api/app/models/raw_evidence.py`
+- `apps/api/app/schemas/evidence.py`
+- `apps/api/app/api/v1/evidence.py`
+- `apps/api/app/scrapers/base.py`
+- `apps/api/app/scrapers/types.py`
+- `apps/api/app/scrapers/utils.py`
+- `apps/api/app/scrapers/http_client.py`
+- `apps/api/app/scrapers/registry.py`
+- `apps/api/app/scrapers/sources/reddit.py`
+- `apps/api/app/services/scrape_executor.py`
+- `apps/api/app/schemas/scrape_execution.py`
+- `apps/api/app/api/v1/scrape_execution.py`
+- `apps/api/alembic/versions/0012_raw_evidence_ingestion_metadata.py`
+- `apps/api/tests/test_scrape_execution.py`
+- `apps/api/tests/test_evidence.py`
+- `apps/api/tests/test_reddit_live_scraper.py`
+
+#### Test notes
+- Alembic migration for ingestion metadata passes
+- Legacy DB rows were backfilled for `raw_payload_json`
+- Pytest: 24 tests passing
+- Evidence endpoints return ingestion metadata correctly
+- Scrape execution persists ingestion metadata successfully
+- Deduplication-aware scrape execution response works correctly
+- Reddit live-ingestion foundation behaves correctly in tests
+
+#### Known issues
+- Only the first live connector foundation is completed in this step
+- Remaining live connectors are still pending for V2 Step 18
+- Real network variability, rate-limit behavior, and provider-specific fallbacks will deepen further in the next step
+
+#### Next step after completion
+- Step 18 — Remaining live source connectors
