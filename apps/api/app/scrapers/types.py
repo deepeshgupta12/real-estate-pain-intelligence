@@ -12,6 +12,13 @@ class ScrapedItem(BaseModel):
     author_name: str | None = None
     source_url: str | None = None
     published_at: datetime | None = None
+
+    fetched_at: datetime | None = None
+    source_query: str | None = None
+    parser_version: str | None = None
+    dedupe_key: str | None = None
+    raw_payload_json: dict[str, Any] = Field(default_factory=dict)
+
     raw_text: str = Field(..., min_length=1)
     cleaned_text: str | None = None
     language: str | None = None

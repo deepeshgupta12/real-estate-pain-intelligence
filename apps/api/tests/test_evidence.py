@@ -29,6 +29,11 @@ def test_create_and_list_raw_evidence() -> None:
             "raw_text": "The listings shown were outdated and the response was slow.",
             "cleaned_text": "The listings shown were outdated and the response was slow.",
             "language": "en",
+            "fetched_at": "2026-04-11T12:00:00Z",
+            "source_query": "Magicbricks project review",
+            "parser_version": "manual-v1",
+            "dedupe_key": "manual-dedupe-key",
+            "raw_payload_json": {"video_id": "abc123", "manual": True},
             "is_relevant": True,
             "metadata_json": {"video_id": "abc123"},
         },
@@ -37,6 +42,9 @@ def test_create_and_list_raw_evidence() -> None:
     created_payload = evidence_response.json()
     assert created_payload["platform_name"] == "Magicbricks"
     assert created_payload["content_type"] == "comment"
+    assert created_payload["source_query"] == "Magicbricks project review"
+    assert created_payload["parser_version"] == "manual-v1"
+    assert created_payload["dedupe_key"] == "manual-dedupe-key"
 
     list_response = client.get("/api/v1/evidence")
     assert list_response.status_code == 200

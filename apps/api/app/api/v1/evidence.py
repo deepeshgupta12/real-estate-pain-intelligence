@@ -10,6 +10,14 @@ from app.schemas.evidence import RawEvidenceCreateRequest, RawEvidenceResponse
 router = APIRouter(prefix="/evidence", tags=["evidence"])
 
 
+def _hydrate_legacy_evidence_defaults(evidence: RawEvidence) -> RawEvidence:
+    if evidence.raw_payload_json is None:
+        evidence.raw_payload_json = {}
+    if evidence.metadata_json is None:
+        evidence.metadata_json = {}
+    return evidence
+
+
 @router.post(
     "",
     response_model=RawEvidenceResponse,
@@ -35,20 +43,31 @@ def create_raw_evidence(
         author_name=payload.author_name,
         source_url=payload.source_url,
         published_at=payload.published_at,
+        fetched_at=payload.fetched_at,
+        source_query=payload.source_query,
+        parser_version=payload.parser_version,
+        dedupe_key=payload.dedupe_key,
+        raw_payload_json=payload.raw_payload_json or {},
         raw_text=payload.raw_text,
         cleaned_text=payload.cleaned_text,
         normalized_text=payload.normalized_text,
         normalized_language=payload.normalized_language,
         normalization_status=payload.normalization_status,
         normalization_hash=payload.normalization_hash,
+        resolved_language=payload.resolved_language,
+        language_family=payload.language_family,
+        script_label=payload.script_label,
+        multilingual_status=payload.multilingual_status,
+        multilingual_notes=payload.multilingual_notes,
+        bridge_text=payload.bridge_text,
         language=payload.language,
         is_relevant=payload.is_relevant,
-        metadata_json=payload.metadata_json,
+        metadata_json=payload.metadata_json or {},
     )
     db.add(evidence)
     db.commit()
     db.refresh(evidence)
-    return evidence
+    return _hydrate_legacy_evidence_defaults(evidence)
 
 
 @router.get("", response_model=list[RawEvidenceResponse])
@@ -56,6 +75,16 @@ def list_raw_evidence(db: Session = Depends(get_db)) -> list[RawEvidence]:
     evidence_items = db.scalars(
         select(RawEvidence).order_by(RawEvidence.id.desc())
     ).all()
+
+    updated = False
+    for evidence in evidence_items:
+        if evidence.raw_payload_json is None or evidence.metadata_json is None:
+            _hydrate_legacy_evidence_defaults(evidence)
+            updated = True
+
+    if updated:
+        db.commit()
+
     return list(evidence_items)
 
 
@@ -67,4 +96,10 @@ def get_raw_evidence(evidence_id: int, db: Session = Depends(get_db)) -> RawEvid
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Raw evidence {evidence_id} not found",
         )
+
+    if evidence.raw_payload_json is None or evidence.metadata_json is None:
+        _hydrate_legacy_evidence_defaults(evidence)
+        db.commit()
+        db.refresh(evidence)
+
     return evidence

@@ -26,6 +26,18 @@ class RawEvidence(Base):
     author_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    source_query: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    parser_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    dedupe_key: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    raw_payload_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=dict,
+        server_default="{}",
+    )
+
     raw_text: Mapped[str] = mapped_column(Text, nullable=False)
     cleaned_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     normalized_text: Mapped[str | None] = mapped_column(Text, nullable=True)
