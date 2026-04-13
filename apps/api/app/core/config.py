@@ -90,6 +90,18 @@ class Settings(BaseSettings):
     observability_recent_failure_window_minutes: int = 60
     observability_recent_events_window_minutes: int = 60
 
+    # Multi-agent orchestrator settings
+    agent_orchestrator_enabled: bool = False
+    anthropic_api_key: str | None = None
+    agent_orchestrator_model: str = "claude-3-haiku-20240307"
+    agent_orchestrator_max_tokens: int = 1500
+    agent_orchestrator_cache_enabled: bool = True
+
+    # Topic modeling settings
+    topic_modeling_enabled: bool = True
+    topic_modeling_default_method: str = "auto"  # "auto" | "nmf" | "lda" | "hdbscan"
+    topic_modeling_n_topics: int = 8
+
     model_config = SettingsConfigDict(
         env_file=str(ENV_FILE_PATH),
         env_file_encoding="utf-8",

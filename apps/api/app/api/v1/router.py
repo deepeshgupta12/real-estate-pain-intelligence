@@ -18,6 +18,8 @@ from app.api.v1.scrape_execution import router as scrape_execution_router
 from app.api.v1.system import router as system_router
 from app.api.v1.trending import router as trending_router
 from app.api.v1.organizations import router as organizations_router
+from app.api.v1.topic_modeling import router as topic_modeling_router
+from app.api.v1.agent_orchestration import router as agent_orchestration_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)
@@ -38,3 +40,5 @@ api_router.include_router(export_router)
 api_router.include_router(final_hardening_router)
 api_router.include_router(trending_router)
 api_router.include_router(organizations_router)
+api_router.include_router(topic_modeling_router)
+api_router.include_router(agent_orchestration_router)
