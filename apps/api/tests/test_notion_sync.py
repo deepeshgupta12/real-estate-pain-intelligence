@@ -1,11 +1,13 @@
 from fastapi.testclient import TestClient
 
+from app.core.config import get_settings
+from app.integrations.notion_client import NotionClient
 from app.main import app
 
 client = TestClient(app)
 
 
-def test_notion_sync_flow() -> None:
+def test_notion_sync_flow(monkeypatch) -> None:
     run_response = client.post(
         "/api/v1/runs",
         json={
@@ -66,16 +68,43 @@ def test_notion_sync_flow() -> None:
     jobs_payload = jobs_response.json()
     assert len(jobs_payload) >= 1
     sync_job_id = jobs_payload[0]["id"]
-    assert jobs_payload[0]["sync_status"] == "pending_sync"
+    assert jobs_payload[0]["sync_status"] == "queued"
+    assert jobs_payload[0]["idempotency_key"] is not None
 
-    mark_synced_response = client.post(
-        f"/api/v1/notion-sync/mark-synced/{sync_job_id}",
-        json={
-            "notion_page_id": "notion-page-123",
-            "sync_notes": "Synced successfully",
-        },
-    )
-    assert mark_synced_response.status_code == 200
-    mark_synced_payload = mark_synced_response.json()
-    assert mark_synced_payload["sync_status"] == "synced"
-    assert mark_synced_payload["notion_page_id"] == "notion-page-123"
+    settings = get_settings()
+    original_enable = settings.notion_enable_real_sync
+    original_api_key = settings.notion_api_key
+    original_database_id = settings.notion_database_id
+    original_mode = settings.notion_destination_mode
+
+    settings.notion_enable_real_sync = True
+    settings.notion_api_key = "test-notion-key"
+    settings.notion_database_id = "db-test-123"
+    settings.notion_destination_mode = "database"
+
+    def _mock_create_database_page(self, *, database_id: str, properties: dict, children: list):
+        assert database_id == "db-test-123"
+        assert "Name" in properties
+        assert len(children) >= 2
+        return {
+            "id": "notion-page-123",
+            "parent": {"database_id": database_id},
+            "url": "https://www.notion.so/notion-page-123",
+        }
+
+    monkeypatch.setattr(NotionClient, "create_database_page", _mock_create_database_page)
+
+    try:
+        execute_response = client.post(f"/api/v1/notion-sync/execute/{sync_job_id}")
+    finally:
+        settings.notion_enable_real_sync = original_enable
+        settings.notion_api_key = original_api_key
+        settings.notion_database_id = original_database_id
+        settings.notion_destination_mode = original_mode
+
+    assert execute_response.status_code == 200
+    execute_payload = execute_response.json()
+    assert execute_payload["sync_status"] == "synced"
+    assert execute_payload["notion_page_id"] == "notion-page-123"
+    assert execute_payload["notion_database_id"] == "db-test-123"
+    assert execute_payload["retry_count"] == 0

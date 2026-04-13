@@ -838,3 +838,121 @@ Status: Completed
 
 #### Next step after completion
 - Step 19 — Real export generation
+
+### Step 19 — Real export generation
+Status: Completed
+
+#### Delivered
+- Real CSV export generation added
+- Real JSON export generation added
+- Real PDF export generation added
+- Run-level export packaging added for:
+  - raw evidence
+  - normalized and multilingual-ready evidence fields
+  - agent insights
+  - retrieval documents
+  - human review items
+  - notion sync jobs
+- Export output directory setting added
+- Export artifact metadata fields added to export jobs
+- File path, file size, generated timestamp, and row-count persistence added
+- PDF executive summary generation added
+- Export generation now produces real completed artifacts instead of simulated jobs
+- Export test coverage updated for real artifact validation
+
+#### Implemented files
+- `apps/api/app/core/config.py`
+- `apps/api/pyproject.toml`
+- `apps/api/app/models/export_job.py`
+- `apps/api/app/schemas/export.py`
+- `apps/api/app/services/export.py`
+- `apps/api/app/api/v1/export.py`
+- `apps/api/alembic/versions/0013_export_artifact_metadata.py`
+- `apps/api/tests/test_export.py`
+
+#### Test notes
+- Alembic migration for export artifact metadata passes
+- Pytest passes with real export coverage added
+- CSV export artifact generation works correctly
+- JSON export artifact generation works correctly
+- PDF executive summary export generation works correctly
+- Export jobs now persist real file paths and artifact metadata
+- Generated files are present on disk and validated in tests
+
+#### Known issues
+- Export artifacts are generated locally on disk and are not yet uploaded to object storage
+- Signed URL support is not yet implemented
+- PDF layout is clean and usable but still lightweight; richer branded formatting can be improved later
+
+#### Next step after completion
+- Step 20 — Real Notion integration
+
+### Step 20 — Real Notion integration
+Status: Completed
+
+#### Delivered
+- Real Notion client integration added
+- Config-driven Notion destination support added for:
+  - database mode
+  - page mode
+- Notion API settings added to backend configuration
+- Real sync execution endpoint added for individual sync jobs
+- Real sync execution endpoint added for run-level sync batches
+- Idempotency protection added using stable sync keys per approved review item
+- Existing synced jobs are now preserved and not re-created unnecessarily
+- Retry-aware sync lifecycle added with statuses:
+  - queued
+  - retrying
+  - synced
+  - failed
+- Notion sync metadata added:
+  - notion database id
+  - idempotency key
+  - retry count
+  - last attempted timestamp
+  - last error message
+  - provider response payload
+- Real payload packaging added using:
+  - approved human review item
+  - linked agent insight
+  - linked raw evidence
+  - run metadata
+- Notion page content now includes executive structured sections for:
+  - pain point summary
+  - root cause hypothesis
+  - action recommendation
+  - raw evidence
+  - metadata snapshot
+- Manual mark-synced and mark-failed endpoints retained for operational override
+- Real Notion integration test coverage added
+- Notion client unit coverage added
+
+#### Implemented files
+- `apps/api/app/core/config.py`
+- `apps/api/.env.example`
+- `apps/api/app/models/notion_sync_job.py`
+- `apps/api/app/schemas/notion_sync.py`
+- `apps/api/app/api/v1/notion_sync.py`
+- `apps/api/app/services/notion_sync.py`
+- `apps/api/app/integrations/__init__.py`
+- `apps/api/app/integrations/notion_client.py`
+- `apps/api/alembic/versions/0014_notion_real_sync_metadata.py`
+- `apps/api/tests/test_notion_sync.py`
+- `apps/api/tests/test_notion_client.py`
+
+#### Test notes
+- Alembic migration for real Notion sync metadata passes
+- Pytest passes with real Notion integration coverage added
+- Approved review items generate queued Notion sync jobs correctly
+- Real sync execution updates jobs to synced with page id when provider call succeeds
+- Idempotency-aware generation avoids unnecessary duplicate synced jobs
+- Retry metadata persists correctly across sync attempts
+- Notion client request builders work correctly in tests
+
+#### Known issues
+- Real sync depends on the user configuring valid Notion credentials and destination ids
+- Database-mode sync requires property names in the target Notion database to match configured env names
+- Richer schema mapping and object-storage style sync artifact archiving can be improved later
+
+#### Next step after completion
+- Step 21 — Embedding retrieval foundation

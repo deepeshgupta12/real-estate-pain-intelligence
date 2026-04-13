@@ -32,6 +32,27 @@ class Settings(BaseSettings):
     scraper_public_social_search_base_url: str = "https://hn.algolia.com/api/v1/search"
     scraper_review_sites_base_url: str = "https://www.trustpilot.com/review"
 
+    export_output_dir: str = "./generated_exports"
+
+    notion_enable_real_sync: bool = False
+    notion_api_base_url: str = "https://api.notion.com/v1"
+    notion_api_version: str = "2022-06-28"
+    notion_api_key: str | None = None
+    notion_timeout_seconds: float = 15.0
+    notion_max_retries: int = 2
+    notion_retry_backoff_seconds: float = 1.0
+    notion_destination_mode: Literal["database", "page"] = "database"
+    notion_database_id: str | None = None
+    notion_parent_page_id: str | None = None
+    notion_destination_label: str = "notion_database"
+    notion_title_property_name: str = "Name"
+    notion_status_property_name: str = "Status"
+    notion_priority_property_name: str = "Priority"
+    notion_brand_property_name: str = "Brand"
+    notion_source_property_name: str = "Source"
+    notion_decision_property_name: str = "Decision"
+    notion_default_title_prefix: str = "REPI"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

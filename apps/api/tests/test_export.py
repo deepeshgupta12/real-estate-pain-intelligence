@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -56,17 +58,44 @@ def test_export_flow() -> None:
     jobs_payload = jobs_response.json()
     assert len(jobs_payload) == 3
 
-    export_job_id = jobs_payload[0]["id"]
+    formats = {job["export_format"] for job in jobs_payload}
+    assert formats == {"csv", "json", "pdf"}
+
+    for job in jobs_payload:
+        assert job["export_status"] == "completed"
+        assert job["file_name"] is not None
+        assert job["file_path"] is not None
+        assert job["file_size_bytes"] is not None
+        assert job["file_size_bytes"] > 0
+        assert job["row_count"] is not None
+        assert job["generated_at"] is not None
+        assert isinstance(job["summary_json"], dict)
+        assert isinstance(job["artifact_metadata_json"], dict)
+
+        export_path = Path(job["file_path"])
+        assert export_path.exists()
+        assert export_path.is_file()
+
+    csv_job = next(job for job in jobs_payload if job["export_format"] == "csv")
+    json_job = next(job for job in jobs_payload if job["export_format"] == "json")
+    pdf_job = next(job for job in jobs_payload if job["export_format"] == "pdf")
+
+    assert csv_job["row_count"] >= 1
+    assert json_job["row_count"] >= 1
+    assert pdf_job["row_count"] >= 1
 
     completed_response = client.post(
-        f"/api/v1/exports/mark-completed/{export_job_id}",
+        f"/api/v1/exports/mark-completed/{csv_job['id']}",
         json={
-            "file_name": "run-export.csv",
-            "file_path": "/tmp/run-export.csv",
-            "export_notes": "Export generated successfully",
+            "file_name": csv_job["file_name"],
+            "file_path": csv_job["file_path"],
+            "file_size_bytes": csv_job["file_size_bytes"],
+            "row_count": csv_job["row_count"],
+            "artifact_metadata_json": csv_job["artifact_metadata_json"],
+            "export_notes": "Manual completion confirmation",
         },
     )
     assert completed_response.status_code == 200
     completed_payload = completed_response.json()
     assert completed_payload["export_status"] == "completed"
-    assert completed_payload["file_name"] == "run-export.csv"
+    assert completed_payload["export_notes"] == "Manual completion confirmation"
