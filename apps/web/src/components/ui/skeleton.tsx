@@ -1,4 +1,6 @@
-export function Skeleton({ className = "" }: { className?: string }) {
+import React from "react";
+
+export function Skeleton({ className = "", style }: { className?: string; style?: React.CSSProperties }) {
   return (
     <div
       className={`skeleton ${className}`}
@@ -7,6 +9,7 @@ export function Skeleton({ className = "" }: { className?: string }) {
         backgroundSize: "200% 100%",
         animation: "shimmer 1.5s infinite",
         borderRadius: "6px",
+        ...style,
       }}
     />
   );
