@@ -19,6 +19,7 @@ type PipelineActionsPanelProps = {
   currentRunId: number | null;
   actionLoadingKey: PipelineActionKey | null;
   onAction: (action: PipelineActionKey) => Promise<void>;
+  lastActionError?: string;
 };
 
 const steps: Array<{
@@ -75,6 +76,7 @@ export function PipelineActionsPanel({
   currentRunId,
   actionLoadingKey,
   onAction,
+  lastActionError,
 }: PipelineActionsPanelProps) {
   const isLoading = actionLoadingKey !== null;
 
@@ -120,9 +122,21 @@ export function PipelineActionsPanel({
         })}
       </div>
 
+      {/* Step order guidance */}
+      <div className="mt-4 rounded-lg bg-slate-50 border border-slate-200 p-4 text-sm text-slate-600">
+        <span className="font-semibold text-slate-700">Run steps in order:</span> Step 1 → 2 → 3 → 4 → 5 → 6 → 7.
+        Each step requires the previous one to have completed successfully.
+      </div>
+
       {!currentRunId && (
-        <div className="mt-6 rounded-lg bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800">
+        <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800">
           Create or load a session first to run pipeline steps.
+        </div>
+      )}
+
+      {lastActionError && (
+        <div className="mt-3 rounded-lg bg-red-50 border border-red-200 p-4 text-sm text-red-800">
+          <span className="font-semibold">Step failed:</span> {lastActionError}
         </div>
       )}
     </SectionShell>

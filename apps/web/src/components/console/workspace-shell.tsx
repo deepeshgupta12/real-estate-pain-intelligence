@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Sidebar } from "@/components/app-shell/sidebar";
 import { Topbar } from "@/components/app-shell/topbar";
 import { HeroBanner } from "@/components/dashboard/hero-banner";
@@ -191,6 +191,11 @@ export function WorkspaceShell({
     useState<PipelineActionKey | null>(null);
   const [workspaceError, setWorkspaceError] = useState("");
   const [workspaceMessage, setWorkspaceMessage] = useState("");
+
+  // Scroll to top on mount so page refresh doesn't restore a mid-page hash position
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, []);
 
   const activeQueueCount = observabilityOverview?.active_queue_count ?? 0;
   const staleRunsCount = observabilityOverview?.stale_active_runs_count ?? 0;
@@ -477,8 +482,8 @@ export function WorkspaceShell({
             />
             <OverviewStatCard
               label="Current build"
-              value="Step 26B"
-              helper="Workspace UX reset and review moderation redesign."
+              value="v0.2 — Step 32"
+              helper="Production-grade: background tasks, JWT auth, topic modeling, 5-agent orchestration."
             />
           </section>
 
@@ -507,13 +512,13 @@ export function WorkspaceShell({
 
           <section className="mt-8 grid gap-6 xl:grid-cols-2">
             <NavPreviewCard
-              title="What this redesign improves"
-              description="This step focuses on layout clarity and operator ease, not on adding more UI noise."
+              title="Platform capabilities"
+              description="End-to-end pain point intelligence from public customer signals."
               points={[
-                "Cleaner run-first operating flow",
-                "Monitoring sections feel lighter and easier to scan",
-                "Review moderation is now more structured and less table-heavy",
-                "Current workspace state is easier to understand at a glance",
+                "Scrape Reddit, YouTube, app stores & review sites",
+                "Multilingual support — English, Hindi, Hinglish",
+                "LLM-assisted pain point classification & root cause analysis",
+                "Export to CSV, JSON, PDF and sync to Notion",
               ]}
             />
 
@@ -643,6 +648,7 @@ export function WorkspaceShell({
               currentRunId={currentRunId}
               actionLoadingKey={actionLoadingKey}
               onAction={handleAction}
+              lastActionError={workspaceError || undefined}
             />
 
             <QueueHealthPanel queueItems={queueHealth} />

@@ -16,9 +16,12 @@ const eslintConfig = defineConfig([
   // Project-level rule overrides
   {
     rules: {
-      // Downgrade to warn so unused vars don't block CI; fix incrementally
-      "@typescript-eslint/no-unused-vars": "warn",
-      // Allow explicit any in limited cases (prefer specific types where feasible)
+      // Warn only; underscore-prefixed names are intentionally unused
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" },
+      ],
+      // Warn only — allow explicit any in isolated cases
       "@typescript-eslint/no-explicit-any": "warn",
     },
   },
