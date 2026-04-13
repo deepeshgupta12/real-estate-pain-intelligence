@@ -1,9 +1,12 @@
 from datetime import datetime, timezone
+from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
+from app.models.run_event import RunEvent
 from app.models.scrape_run import ScrapeRun
 from app.services.run_events import RunEventService
 
@@ -18,6 +21,54 @@ class OrchestratorService:
                 detail=f"Scrape run {run_id} not found",
             )
         return run
+
+    @staticmethod
+    def _heartbeat_age_seconds(last_heartbeat_at: datetime | None) -> int | None:
+        if last_heartbeat_at is None:
+            return None
+        now = datetime.now(timezone.utc)
+        age_seconds = int((now - last_heartbeat_at).total_seconds())
+        return max(age_seconds, 0)
+
+    @staticmethod
+    def _is_stale(run: ScrapeRun) -> bool:
+        if run.status not in {"queued", "running"}:
+            return False
+
+        heartbeat_age_seconds = OrchestratorService._heartbeat_age_seconds(run.last_heartbeat_at)
+        if heartbeat_age_seconds is None:
+            return False
+
+        settings = get_settings()
+        return heartbeat_age_seconds > settings.observability_stale_run_seconds
+
+    @staticmethod
+    def _health_label(run: ScrapeRun, is_stale: bool) -> str:
+        if run.status == "failed":
+            return "failed"
+        if run.status == "completed":
+            return "completed"
+        if is_stale:
+            return "stale"
+        if run.status == "queued":
+            return "waiting"
+        if run.status == "running":
+            return "healthy"
+        return run.status
+
+    @staticmethod
+    def _build_latest_event_snapshot(event: RunEvent | None) -> dict[str, Any] | None:
+        if event is None:
+            return None
+
+        return {
+            "id": event.id,
+            "event_type": event.event_type,
+            "stage": event.stage,
+            "status": event.status,
+            "message": event.message,
+            "created_at": event.created_at,
+        }
 
     @staticmethod
     def dispatch_run(db: Session, run_id: int) -> ScrapeRun:
@@ -172,3 +223,104 @@ class OrchestratorService:
             .order_by(ScrapeRun.id.desc())
         ).all()
         return list(rows)
+
+    @staticmethod
+    def list_active_queue_summaries(db: Session) -> list[dict[str, Any]]:
+        runs = OrchestratorService.list_active_queue(db)
+        summaries: list[dict[str, Any]] = []
+
+        for run in runs:
+            latest_event = RunEventService.get_latest_event_for_run(db, scrape_run_id=run.id)
+            heartbeat_age_seconds = OrchestratorService._heartbeat_age_seconds(run.last_heartbeat_at)
+            is_stale = OrchestratorService._is_stale(run)
+
+            summaries.append(
+                {
+                    "run_id": run.id,
+                    "source_name": run.source_name,
+                    "target_brand": run.target_brand,
+                    "status": run.status,
+                    "pipeline_stage": run.pipeline_stage,
+                    "items_discovered": run.items_discovered,
+                    "items_processed": run.items_processed,
+                    "last_heartbeat_at": run.last_heartbeat_at,
+                    "orchestrator_notes": run.orchestrator_notes,
+                    "heartbeat_age_seconds": heartbeat_age_seconds,
+                    "is_stale": is_stale,
+                    "health_label": OrchestratorService._health_label(run, is_stale=is_stale),
+                    "latest_event_type": latest_event.event_type if latest_event else None,
+                    "latest_event_at": latest_event.created_at if latest_event else None,
+                    "latest_event_message": latest_event.message if latest_event else None,
+                }
+            )
+
+        return summaries
+
+    @staticmethod
+    def build_run_diagnostics(db: Session, run_id: int) -> dict[str, Any]:
+        from app.services.final_hardening import FinalHardeningService
+
+        run = OrchestratorService.get_run_or_404(db, run_id)
+
+        events = RunEventService.list_events_for_run(
+            db=db,
+            scrape_run_id=run_id,
+            newest_first=False,
+            limit=1000,
+        )
+        latest_event = events[-1] if events else None
+        stage_timeline = RunEventService.build_stage_timeline(db=db, scrape_run_id=run_id)
+        readiness = FinalHardeningService.build_run_readiness(db=db, run_id=run_id)
+
+        heartbeat_age_seconds = OrchestratorService._heartbeat_age_seconds(run.last_heartbeat_at)
+        is_stale = OrchestratorService._is_stale(run)
+        health_label = OrchestratorService._health_label(run, is_stale=is_stale)
+
+        fail_event = None
+        last_successful_stage = None
+        for event in events:
+            if event.status != "failed" and event.stage != "failed":
+                last_successful_stage = event.stage
+            if event.event_type == "fail" or event.status == "failed":
+                fail_event = event
+
+        failure_snapshot = {
+            "failed": run.status == "failed",
+            "error_message": run.error_message,
+            "failed_at": fail_event.created_at if fail_event else None,
+            "failed_stage": fail_event.stage if fail_event else ("failed" if run.status == "failed" else None),
+            "failed_event_message": fail_event.message if fail_event else None,
+            "last_successful_stage": last_successful_stage,
+        }
+
+        return {
+            "run_id": run.id,
+            "source_name": run.source_name,
+            "target_brand": run.target_brand,
+            "status": run.status,
+            "pipeline_stage": run.pipeline_stage,
+            "trigger_mode": run.trigger_mode,
+            "items_discovered": run.items_discovered,
+            "items_processed": run.items_processed,
+            "started_at": run.started_at,
+            "last_heartbeat_at": run.last_heartbeat_at,
+            "completed_at": run.completed_at,
+            "created_at": run.created_at,
+            "updated_at": run.updated_at,
+            "error_message": run.error_message,
+            "orchestrator_notes": run.orchestrator_notes,
+            "heartbeat_age_seconds": heartbeat_age_seconds,
+            "is_stale": is_stale,
+            "health_label": health_label,
+            "total_events": len(events),
+            "latest_event": OrchestratorService._build_latest_event_snapshot(latest_event),
+            "stage_timeline": stage_timeline,
+            "readiness_checks": dict(readiness["checks"]),
+            "readiness_counts": {
+                key: int(value) for key, value in dict(readiness["counts"]).items() if isinstance(value, int)
+            },
+            "failure_snapshot": failure_snapshot,
+            "metadata": {
+                "stale_threshold_seconds": get_settings().observability_stale_run_seconds,
+            },
+        }

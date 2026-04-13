@@ -6,6 +6,7 @@ from app.schemas.orchestrator import (
     OrchestratorDispatchResponse,
     OrchestratorFailRequest,
     OrchestratorProgressRequest,
+    RunDiagnosticsResponse,
     RunQueueSummaryResponse,
 )
 from app.services.orchestrator import OrchestratorService
@@ -110,18 +111,10 @@ def fail_run(
 
 @router.get("/queue", response_model=list[RunQueueSummaryResponse])
 def list_active_queue(db: Session = Depends(get_db)) -> list[RunQueueSummaryResponse]:
-    runs = OrchestratorService.list_active_queue(db)
-    return [
-        RunQueueSummaryResponse(
-            run_id=run.id,
-            source_name=run.source_name,
-            target_brand=run.target_brand,
-            status=run.status,
-            pipeline_stage=run.pipeline_stage,
-            items_discovered=run.items_discovered,
-            items_processed=run.items_processed,
-            last_heartbeat_at=run.last_heartbeat_at,
-            orchestrator_notes=run.orchestrator_notes,
-        )
-        for run in runs
-    ]
+    return OrchestratorService.list_active_queue_summaries(db)
+
+
+@router.get("/diagnostics/{run_id}", response_model=RunDiagnosticsResponse)
+def get_run_diagnostics(run_id: int, db: Session = Depends(get_db)) -> RunDiagnosticsResponse:
+    diagnostics = OrchestratorService.build_run_diagnostics(db=db, run_id=run_id)
+    return RunDiagnosticsResponse(**diagnostics)

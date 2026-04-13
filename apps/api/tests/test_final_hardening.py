@@ -65,6 +65,7 @@ def test_final_hardening_readiness_and_overview() -> None:
     assert readiness_payload["counts"]["insight_count"] >= 1
     assert readiness_payload["counts"]["review_count"] >= 1
     assert readiness_payload["counts"]["approved_review_count"] == 1
+    assert readiness_payload["counts"]["embedded_retrieval_count"] >= 1
     assert readiness_payload["counts"]["export_count"] == 2
 
     overview_response = client.get("/api/v1/final-hardening/overview")
@@ -75,6 +76,16 @@ def test_final_hardening_readiness_and_overview() -> None:
     assert overview_payload["insights_total"] >= 1
     assert overview_payload["review_queue_total"] >= 1
     assert overview_payload["approved_review_total"] >= 1
+
+    observability_response = client.get("/api/v1/final-hardening/observability")
+    assert observability_response.status_code == 200
+    observability_payload = observability_response.json()
+    assert observability_payload["runs_total"] >= 1
+    assert observability_payload["active_queue_count"] >= 0
+    assert observability_payload["recent_events_count"] >= 1
+    assert observability_payload["review_backlog_count"] >= 0
+    assert isinstance(observability_payload["runs_by_status"], dict)
+    assert isinstance(observability_payload["runs_by_stage"], dict)
 
 
 def test_final_hardening_guardrails_block_downstream_without_prerequisites() -> None:

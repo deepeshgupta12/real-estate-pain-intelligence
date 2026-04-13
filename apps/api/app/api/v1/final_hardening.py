@@ -2,7 +2,11 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.schemas.final_hardening import RunReadinessResponse, SystemOverviewResponse
+from app.schemas.final_hardening import (
+    ObservabilityOverviewResponse,
+    RunReadinessResponse,
+    SystemOverviewResponse,
+)
 from app.services.final_hardening import FinalHardeningService
 
 router = APIRouter(prefix="/final-hardening", tags=["final-hardening"])
@@ -28,3 +32,8 @@ def get_run_readiness(
 @router.get("/overview", response_model=SystemOverviewResponse)
 def get_system_overview(db: Session = Depends(get_db)) -> SystemOverviewResponse:
     return SystemOverviewResponse(**FinalHardeningService.build_system_overview(db=db))
+
+
+@router.get("/observability", response_model=ObservabilityOverviewResponse)
+def get_observability_overview(db: Session = Depends(get_db)) -> ObservabilityOverviewResponse:
+    return ObservabilityOverviewResponse(**FinalHardeningService.build_observability_overview(db=db))
