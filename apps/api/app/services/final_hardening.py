@@ -98,6 +98,12 @@ class FinalHardeningService:
             db,
             select(func.count(RetrievalDocument.id)).where(RetrievalDocument.scrape_run_id == run_id),
         )
+        embedded_retrieval_count = FinalHardeningService._count(
+            db,
+            select(func.count(RetrievalDocument.id))
+            .where(RetrievalDocument.scrape_run_id == run_id)
+            .where(RetrievalDocument.embedding_status == "embedded"),
+        )
         review_count = FinalHardeningService._count(
             db,
             select(func.count(HumanReviewItem.id)).where(HumanReviewItem.scrape_run_id == run_id),
@@ -126,7 +132,7 @@ class FinalHardeningService:
             "normalization_ready": evidence_count > 0,
             "multilingual_ready": normalized_count > 0,
             "intelligence_ready": multilingual_count > 0 or normalized_count > 0,
-            "retrieval_ready": evidence_count > 0 and insight_count > 0,
+            "retrieval_ready": embedded_retrieval_count > 0,
             "human_review_ready": insight_count > 0,
             "notion_ready": approved_review_count > 0,
             "export_ready": evidence_count > 0,
@@ -141,6 +147,7 @@ class FinalHardeningService:
                 "multilingual_count": multilingual_count,
                 "insight_count": insight_count,
                 "retrieval_count": retrieval_count,
+                "embedded_retrieval_count": embedded_retrieval_count,
                 "review_count": review_count,
                 "approved_review_count": approved_review_count,
                 "notion_sync_count": notion_sync_count,
