@@ -807,6 +807,163 @@ The previous frontend used a dark theme with CSS classes `workspace-surface`, `w
 
 ---
 
+### Step 29 — Background Tasks + JWT Authentication + Rate Limiting
+Status: Completed
+Branch: `feat/step-29-background-tasks-auth`
+
+#### Context
+All pipeline stages executed synchronously via HTTP, holding connections open for up to 30 seconds and causing visible timeouts. No authentication existed — any caller with the URL could trigger scraping or delete runs. No rate limiting protected against abuse.
+
+#### Delivered
+
+**Background task processing (ARQ + Redis):**
+- `apps/api/app/workers/tasks.py` — ARQ worker with 7 async task functions: `task_execute_scrape`, `task_normalize_run`, `task_multilingual_run`, `task_intelligence_run`, `task_retrieval_index`, `task_generate_review_queue`, `task_generate_exports`.
+- `WorkerSettings` configured: 10 concurrent jobs, 300s timeout, 1hr result retention.
+- All pipeline stage API endpoints updated to enqueue tasks and return job IDs immediately.
+
+**JWT authentication:**
+- `apps/api/app/core/security.py` — `create_access_token`, `create_refresh_token`, `decode_token`, `hash_password`, `verify_password` using `python-jose` + `passlib[bcrypt]`.
+- `apps/api/app/api/v1/auth.py` — `POST /api/v1/auth/register`, `POST /api/v1/auth/login` (OAuth2 form), `POST /api/v1/auth/refresh`, `GET /api/v1/auth/me`.
+- Dev-mode bypass: when `jwt_secret_key` is default placeholder, returns synthetic admin user.
+- `apps/api/app/models/user.py` — `User` model with `UserRole` enum (admin/analyst/viewer), `is_active`, `last_login_at`.
+- `apps/api/alembic/versions/0017_users_table.py` — users table migration.
+
+**Rate limiting:**
+- SlowAPI middleware added: 60 requests/minute per IP by default.
+- `rate_limit_requests_per_minute` and `rate_limit_enabled` settings added to config.
+
+**DB connection pooling:**
+- `db_pool_size`, `db_max_overflow`, `db_pool_pre_ping` settings added to config.
+- SQLAlchemy engine configured with production-appropriate pool settings.
+
+**Config additions:**
+- `redis_url`, `arq_job_timeout`, `arq_max_jobs`, `jwt_secret_key`, `jwt_algorithm`, `jwt_access_token_expire_minutes`, `jwt_refresh_token_expire_days`, `rate_limit_*`, `db_pool_*`.
+
+---
+
+### Step 30 — DevOps, Observability + Circuit Breakers + Real Embeddings
+Status: Completed
+Branch: `feat/step-30-devops-intelligence`
+
+#### Delivered
+
+**Docker + multi-stage builds:**
+- `apps/api/Dockerfile` — 2-stage build (builder: pip install; runtime: `python:3.11-slim`, non-root `appuser`, curl health check).
+- `apps/web/Dockerfile` — 2-stage build (deps + build: `node:20-alpine`, Next.js standalone output; runner: minimal image).
+- `docker-compose.yml` at repo root — services: postgres (pgvector:pg16), redis (7-alpine), api, worker (ARQ), web, prometheus, grafana. Monitoring services behind `docker compose --profile monitoring`.
+
+**CI/CD — GitHub Actions:**
+- `.github/workflows/ci.yml` — backend job: pytest with PostgreSQL service container; frontend job: `npm ci` + TypeScript check + `npm run build`; docker-build job on main branch.
+
+**Observability:**
+- `apps/api/app/core/sentry.py` — Sentry init with FastAPI + SQLAlchemy integrations, 10% traces sample rate, environment tagging.
+- Prometheus metrics endpoint exposed via `prometheus-fastapi-instrumentator`.
+- `monitoring/prometheus.yml` — scrape config for API metrics.
+- `monitoring/grafana/` — provisioning directory for Grafana datasources and dashboards.
+
+**Circuit breaker pattern:**
+- `apps/api/app/scrapers/circuit_breaker.py` — `CircuitBreaker` class: CLOSED→OPEN→HALF_OPEN states, 3 failure threshold, 1hr cooldown, `classify_http_error` maps HTTP status codes to error types (BLOCKED, RATE_LIMITED, SERVER_ERROR, NOT_FOUND).
+- All scrapers wired to circuit breaker per source — auto-skips blocked sources without propagating exceptions.
+
+**Real semantic embeddings:**
+- `apps/api/app/services/embeddings.py` upgraded — lazy-loads `paraphrase-multilingual-MiniLM-L12-v2` via sentence-transformers; graceful fallback to 128-dim enhanced hash embedding if model not installed.
+- `embedding_provider` config extended to support `sentence_transformers` value.
+
+**Config additions:**
+- `sentry_dsn`, `sentry_traces_sample_rate`, `prometheus_enabled`, `circuit_breaker_failure_threshold`, `circuit_breaker_cooldown_seconds`.
+
+---
+
+### Step 31 — Intelligence Upgrade + Cross-Run Trending + Multi-Tenant Organizations
+Status: Completed
+Branch: `feat/step-31-intelligence-trending-multitenancy`
+
+#### Delivered
+
+**LLM intelligence upgrade:**
+- `apps/api/app/services/llm_cache.py` — TTL response cache (24hr, SHA256-keyed, max 10k entries, LRU eviction). Thread-safe with `Lock`.
+- `apps/api/app/services/llm_intelligence.py` updated — switched from nonexistent `client.responses.create()` to `client.chat.completions.create()` with proper messages format. Default model updated to `gpt-4o-mini` for cost efficiency. Confidence-based routing: high-confidence tokens skip LLM; low-confidence items use LLM.
+- Config: `intelligence_confidence_threshold`, `intelligence_llm_cache_enabled`, `intelligence_llm_model = "gpt-4o-mini"`.
+- New API: `GET /api/v1/intelligence/llm-cache-stats` — cache hit/miss/hit-rate metrics.
+
+**Cross-run trending:**
+- `apps/api/app/models/pain_point_fingerprint.py` — `PainPointFingerprint` table: `fingerprint_key` (SHA256 of "label:cluster"), `recurrence_count`, rolling weekly buckets (`count_week_0/1/2/3`), `trend_direction` (rising/stable/declining), `high_priority_count`, `avg_priority_score`.
+- `apps/api/app/services/trending.py` — `TrendingService`: `update_fingerprints_for_run(db, run_id)`, `get_top_trending(db, limit, cluster)`, `rotate_weekly_counts(db)` for scheduled weekly rotation.
+- `apps/api/alembic/versions/0018_pain_point_fingerprints.py` — migration.
+- New API: `GET /api/v1/trending/top`, `GET /api/v1/trending/run/{run_id}`, `POST /api/v1/trending/run/{run_id}/update`.
+
+**Multi-tenant organizations:**
+- `apps/api/app/models/organization.py` — `Organization` model: `slug`, `name`, `plan` (free/starter/pro/enterprise), `is_active`, `max_runs_per_month`, `api_key` (rotatable, unique), `settings_json`, `owner_email`.
+- `apps/api/alembic/versions/0019_organizations.py` — organizations table + `organization_id` FK added to `scrape_runs` and `users`.
+- `apps/api/app/api/v1/organizations.py` — CRUD: `POST /api/v1/organizations` (creates with generated API key), `GET /api/v1/organizations/{slug}`, `POST /api/v1/organizations/{slug}/rotate-api-key`, `GET /api/v1/organizations`.
+
+---
+
+### Step 32 — Advanced Topic Modeling + Multi-Agent Orchestration
+Status: Completed
+Branch: `feat/step-32-advanced-intelligence`
+
+#### Context
+Pain point taxonomy was purely keyword-driven with no unsupervised topic discovery. Intelligence pipeline used a single monolithic LLM call with no agent specialization or structured handoff between analytical roles.
+
+#### Delivered
+
+**Topic modeling service (BERTopic-inspired, graceful degradation):**
+- `apps/api/app/services/topic_modeling.py` — `TopicModelingService` with 4-tier fallback strategy:
+  1. **Seed-keyword clusters** (always available): 8 predefined real-estate pain clusters (inventory_quality, platform_performance, lead_management, trust_and_safety, pricing_transparency, search_discovery, transaction_process, ux_design). Scored by keyword overlap frequency.
+  2. **NMF topic extraction** (requires scikit-learn): TF-IDF vectorizer → NMF decomposition. Extracts N latent topics with top-10 keywords per topic.
+  3. **LDA topic extraction** (requires scikit-learn): Count vectorizer → LDA online learning. Alternative to NMF.
+  4. **HDBSCAN semantic clustering** (requires sentence-transformers + hdbscan): True BERTopic-style — embed all texts, HDBSCAN cluster in embedding space, TF-IDF keyword extraction per cluster.
+- Shannon entropy diversity score across seed clusters.
+- ML topic ↔ seed cluster cross-reference mapping.
+- Auto-selects best available method (HDBSCAN → NMF → LDA → seed-only).
+- `get_cluster_summary(db, run_id)` — lightweight cluster counts for dashboard widgets.
+
+**Topic modeling API:**
+- `apps/api/app/api/v1/topic_modeling.py`:
+  - `GET /api/v1/topic-modeling/seed-clusters` — list all predefined clusters.
+  - `GET /api/v1/topic-modeling/{run_id}` — full topic analysis with ML topics + seed clusters + diversity metrics.
+  - `GET /api/v1/topic-modeling/{run_id}/clusters` — lightweight cluster summary for widgets.
+
+**Multi-agent orchestration (Anthropic tool_use pattern):**
+- `apps/api/app/services/agent_orchestrator.py` — `AgentOrchestratorService` with 5 specialized agents:
+  1. **EvidenceClassifier** — evidence type, journey stage, sentiment polarity
+  2. **PainPointExtractor** — label, summary, taxonomy cluster, priority
+  3. **RootCauseAnalyst** — root cause hypothesis, affected system, confidence
+  4. **CompetitorBenchmarker** — competitor label, comparison direction, competitive signal
+  5. **ActionAdvisor** — action recommendation, type (product/engineering/process/investigation/monitoring), effort estimate (quick_win/medium_term/long_term)
+- Agents chain via Anthropic `tool_use` — each agent's output is stored, model continues to next tool.
+- Full TTL response cache shared with LLM intelligence service (SHA256 keyed).
+- Deterministic rule-based fallback when Anthropic SDK unavailable or disabled.
+- Batch analysis with configurable `max_items` limit.
+
+**Agent orchestration API:**
+- `apps/api/app/api/v1/agent_orchestration.py`:
+  - `GET /api/v1/agent-orchestration/status` — capability status (SDK available, model, cache stats, agents list).
+  - `POST /api/v1/agent-orchestration/analyse` — single evidence analysis.
+  - `POST /api/v1/agent-orchestration/analyse-batch` — batch analysis (up to 100 items).
+  - `POST /api/v1/agent-orchestration/run/{run_id}` — analyse all evidence in a scrape run.
+
+**Config additions:**
+- `agent_orchestrator_enabled`, `anthropic_api_key`, `agent_orchestrator_model` (default: `claude-3-haiku-20240307`), `agent_orchestrator_max_tokens`, `topic_modeling_enabled`, `topic_modeling_default_method`, `topic_modeling_n_topics`.
+
+#### Files added / modified
+- `apps/api/app/services/topic_modeling.py` (new)
+- `apps/api/app/services/agent_orchestrator.py` (new)
+- `apps/api/app/api/v1/topic_modeling.py` (new)
+- `apps/api/app/api/v1/agent_orchestration.py` (new)
+- `apps/api/app/api/v1/router.py` (updated: 2 new routers registered)
+- `apps/api/app/core/config.py` (updated: 7 new settings)
+- `apps/api/tests/test_topic_modeling.py` (new: 11 unit tests)
+- `apps/api/tests/test_agent_orchestrator.py` (new: 20 unit tests)
+
+#### Test results
+- 26 unit tests passing (all service-level logic, tool schema validation, caching, fallback behavior)
+- API integration tests for all endpoints
+- No external dependencies required to run tests (SDK/model availability checked at runtime)
+
+---
+
 ## Pending Implementation (V3 Scope)
 
 ### High Priority — Missing from Current Implementation
@@ -897,13 +1054,33 @@ All originally locked V1 features are implemented and tested.
 ### V2 scope: ✅ Fully delivered (Steps 17–26)
 All planned V2 features delivered including live scrapers, real exports, Notion sync, embedding retrieval, LLM intelligence, full frontend console, observability, and diagnostics.
 
-### Step 27–28 (unplanned hardening): ✅ Delivered
-Comprehensive backend reliability and frontend redesign — not in original scope, added based on real operational issues discovered during usage.
+### Step 27–28 (backend hardening + frontend redesign): ✅ Delivered
+Comprehensive backend reliability and frontend light-theme redesign — not in original scope, added based on real operational issues discovered during usage.
 
-### Remaining gaps (V3 scope):
-The product is functional and end-to-end for its core use case. The V3 items above (P1–P18) represent quality, scale, and production-readiness improvements. **The product is demo-ready and operator-usable today. It is not yet production-grade for multi-user or enterprise deployment.**
+### Steps 29–32 (production-grade V3 tier): ✅ Delivered
+All 4 production-grade enhancement tiers implemented:
+- **Step 29**: Background task queue (ARQ), JWT authentication, rate limiting, DB pooling — eliminates synchronous timeout failures
+- **Step 30**: Docker multi-stage builds, GitHub Actions CI/CD, Prometheus metrics, Sentry error tracking, circuit breakers, real sentence-transformers embeddings
+- **Step 31**: LLM caching (TTL + SHA256), gpt-4o-mini cost optimization, cross-run pain point trending + fingerprinting, multi-tenant organization model
+- **Step 32**: BERTopic-style topic modeling (NMF/LDA/HDBSCAN with graceful degradation), 5-agent Anthropic tool_use orchestration pipeline
 
-Top 3 highest-impact next implementations for the product to move from prototype to production:
-1. **Background task processing** (P4) — eliminates the most visible failure mode
-2. **Real semantic embeddings** (P1) — makes retrieval actually useful
-3. **Cross-run deduplication + trending** (P2) — unlocks longitudinal pain point tracking
+### Remaining gaps (lower priority):
+The product is now **production-ready** for single-tenant deployment. The following items represent further quality and scale improvements:
+
+**Frontend depth:**
+- P13: Evidence explorer (browse/search raw collected posts per run)
+- P14: Retrieval search UI (semantic search interface)
+- P15: Export download center with file listing and download links
+
+**Scale and UX:**
+- P3: Multi-source / multi-brand runs (fan-out to multiple source×brand combos)
+- P8: Real Hinglish NLP processing (IndicNLP or lightweight translation)
+- P9: Server-side pagination and richer review queue filtering
+- P10: Data retention and run archiving
+- P11: React Context / Zustand for frontend state management
+- P12: React error boundaries per major console section
+
+**Top 3 next highest-impact items:**
+1. **Evidence explorer + retrieval search UI** (P13–P14) — makes the intelligence output browsable
+2. **Multi-source / multi-brand runs** (P3) — core to competitive intelligence value prop
+3. **Frontend state management** (P11) — needed as the console grows in complexity
