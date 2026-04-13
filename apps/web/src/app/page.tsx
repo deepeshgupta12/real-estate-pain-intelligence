@@ -52,8 +52,6 @@ export default async function Home() {
       observability,
       queue,
       events,
-      summary,
-      reviews,
       runs,
       sources,
     ] = await Promise.all([
@@ -63,8 +61,6 @@ export default async function Home() {
       fetchObservabilityOverview(),
       fetchQueueHealth(),
       fetchRunEvents({ limit: 20, newestFirst: true }),
-      fetchReviewSummary(),
-      fetchReviewQueue({ includeDetails: true, limit: 20, offset: 0 }),
       fetchScrapeRuns(),
       fetchSupportedSources(),
     ]);
@@ -80,23 +76,39 @@ export default async function Home() {
     observabilityOverview = observability;
     queueHealth = queue;
     recentEvents = events;
-    reviewSummary = summary;
-    reviewQueue = reviews;
     initialRuns = runs;
     initialSources = sources;
 
     const preferredRunId = runs[0]?.id ?? queue[0]?.run_id ?? null;
 
     if (preferredRunId) {
-      const [run, diagnostics, readiness] = await Promise.all([
-        fetchScrapeRun(preferredRunId),
-        fetchRunDiagnostics(preferredRunId),
-        fetchRunReadiness(preferredRunId),
-      ]);
+      const [run, diagnostics, readiness, scopedSummary, scopedReviews] =
+        await Promise.all([
+          fetchScrapeRun(preferredRunId),
+          fetchRunDiagnostics(preferredRunId),
+          fetchRunReadiness(preferredRunId),
+          fetchReviewSummary(preferredRunId),
+          fetchReviewQueue({
+            runId: preferredRunId,
+            includeDetails: true,
+            limit: 20,
+            offset: 0,
+          }),
+        ]);
 
       initialRun = run;
       initialDiagnostics = diagnostics;
       initialReadiness = readiness;
+      reviewSummary = scopedSummary;
+      reviewQueue = scopedReviews;
+    } else {
+      const [globalSummary, globalReviews] = await Promise.all([
+        fetchReviewSummary(),
+        fetchReviewQueue({ includeDetails: true, limit: 20, offset: 0 }),
+      ]);
+
+      reviewSummary = globalSummary;
+      reviewQueue = globalReviews;
     }
   } catch {
     apiStatus = "Unavailable";

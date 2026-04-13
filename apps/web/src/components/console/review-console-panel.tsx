@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   approveReviewItem,
   bulkApproveReviewItems,
@@ -15,11 +15,53 @@ import {
 import { SectionShell } from "@/components/console/section-shell";
 
 type ReviewConsolePanelProps = {
+  initialRunId: number | null;
+  activeRunId: number | null;
   initialSummary: ReviewSummaryResponse;
   initialQueue: ReviewQueueItem[];
 };
 
+function getAnalysisMode(item: ReviewQueueItem): string {
+  const snapshotMode = item.insight_snapshot?.analysis_mode;
+  if (typeof snapshotMode === "string" && snapshotMode.trim()) {
+    return snapshotMode;
+  }
+
+  const metadataMode = item.metadata_json?.analysis_mode;
+  if (typeof metadataMode === "string" && metadataMode.trim()) {
+    return metadataMode;
+  }
+
+  return "N/A";
+}
+
+function getFetchMode(item: ReviewQueueItem): string {
+  const evidenceMode = item.evidence_snapshot?.metadata_json?.fetch_mode;
+  if (typeof evidenceMode === "string" && evidenceMode.trim()) {
+    return evidenceMode;
+  }
+
+  const metadataMode = item.metadata_json?.fetch_mode;
+  if (typeof metadataMode === "string" && metadataMode.trim()) {
+    return metadataMode;
+  }
+
+  return "unknown";
+}
+
+function getSourceName(item: ReviewQueueItem): string {
+  return (
+    item.evidence_snapshot?.source_name ||
+    (typeof item.metadata_json?.source_name === "string"
+      ? item.metadata_json.source_name
+      : "") ||
+    "N/A"
+  );
+}
+
 export function ReviewConsolePanel({
+  initialRunId,
+  activeRunId,
   initialSummary,
   initialQueue,
 }: ReviewConsolePanelProps) {
@@ -28,7 +70,7 @@ export function ReviewConsolePanel({
   const [selectedItem, setSelectedItem] = useState<ReviewQueueItem | null>(
     initialQueue[0] ?? null,
   );
-  const [runId, setRunId] = useState("");
+  const [runId, setRunId] = useState(initialRunId ? String(initialRunId) : "");
   const [reviewStatus, setReviewStatus] = useState("");
   const [reviewerDecision, setReviewerDecision] = useState("");
   const [priorityLabel, setPriorityLabel] = useState("");
@@ -42,8 +84,19 @@ export function ReviewConsolePanel({
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
-  async function reloadData() {
-    const parsedRunId = runId ? Number(runId) : undefined;
+  const liveCount = queue.filter((item) => getFetchMode(item) === "live").length;
+  const stubCount = queue.filter((item) => getFetchMode(item) === "stub").length;
+  const unknownFetchCount = queue.filter(
+    (item) => !["live", "stub"].includes(getFetchMode(item)),
+  ).length;
+
+  const llmUsedCount = queue.filter(
+    (item) => item.insight_snapshot?.llm_used === true,
+  ).length;
+
+  async function reloadData(overrideRunId?: string) {
+    const effectiveRunId = overrideRunId ?? runId;
+    const parsedRunId = effectiveRunId ? Number(effectiveRunId) : undefined;
 
     const [summaryData, queueData] = await Promise.all([
       fetchReviewSummary(parsedRunId),
@@ -70,6 +123,68 @@ export function ReviewConsolePanel({
     }
   }
 
+  useEffect(() => {
+    const nextRunValue = activeRunId ? String(activeRunId) : "";
+
+    setRunId(nextRunValue);
+    setSelectedIds([]);
+    setReviewerNotes("");
+    setError("");
+    setStatusMessage("");
+
+    if (activeRunId === initialRunId) {
+      setSummary(initialSummary);
+      setQueue(initialQueue);
+      setSelectedItem(initialQueue[0] ?? null);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function syncToActiveRun() {
+      setLoading(true);
+
+      try {
+        const parsedRunId = nextRunValue ? Number(nextRunValue) : undefined;
+        const [summaryData, queueData] = await Promise.all([
+          fetchReviewSummary(parsedRunId),
+          fetchReviewQueue({
+            runId: parsedRunId,
+            includeDetails: true,
+            limit: 20,
+            offset: 0,
+          }),
+        ]);
+
+        if (cancelled) {
+          return;
+        }
+
+        setSummary(summaryData);
+        setQueue(queueData);
+        setSelectedItem(queueData[0] ?? null);
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Failed to sync review console to the active run",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void syncToActiveRun();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRunId, initialQueue, initialRunId, initialSummary]);
+
   async function handleLoadQueue() {
     setLoading(true);
     setError("");
@@ -77,6 +192,12 @@ export function ReviewConsolePanel({
 
     try {
       await reloadData();
+      setSelectedIds([]);
+      setStatusMessage(
+        runId
+          ? `Loaded review queue for run #${runId}.`
+          : "Loaded review queue across all runs.",
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load review queue");
     } finally {
@@ -112,7 +233,9 @@ export function ReviewConsolePanel({
       const detail = await fetchReviewDetail(id);
       setSelectedItem(detail);
       setStatusMessage(
-        action === "approve" ? "Review item approved successfully." : "Review item rejected successfully.",
+        action === "approve"
+          ? "Review item approved successfully."
+          : "Review item rejected successfully.",
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Review action failed");
@@ -160,8 +283,22 @@ export function ReviewConsolePanel({
 
   function toggleSelection(id: number) {
     setSelectedIds((current) =>
-      current.includes(id) ? current.filter((itemId) => itemId !== id) : [...current, id],
+      current.includes(id)
+        ? current.filter((itemId) => itemId !== id)
+        : [...current, id],
     );
+  }
+
+  function handleUseActiveRun() {
+    setRunId(activeRunId ? String(activeRunId) : "");
+    setStatusMessage("");
+    setError("");
+  }
+
+  function handleShowAllRuns() {
+    setRunId("");
+    setStatusMessage("");
+    setError("");
   }
 
   return (
@@ -171,7 +308,7 @@ export function ReviewConsolePanel({
       title="Review console"
       description="Review summary, filtered queue, joined detail, and single or bulk moderation actions for agent-generated insights."
     >
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-4 xl:grid-cols-7">
         <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
           <p className="text-xs uppercase tracking-[0.16em] text-white/45">Total</p>
           <p className="mt-2 text-2xl font-semibold text-white">{summary.total_items}</p>
@@ -193,6 +330,52 @@ export function ReviewConsolePanel({
           <p className="mt-2 text-2xl font-semibold text-rose-300">
             {summary.rejected_count}
           </p>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
+          <p className="text-xs uppercase tracking-[0.16em] text-white/45">LLM assisted</p>
+          <p className="mt-2 text-2xl font-semibold text-cyan-200">
+            {summary.llm_assisted_count}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
+          <p className="text-xs uppercase tracking-[0.16em] text-white/45">Live-backed</p>
+          <p className="mt-2 text-2xl font-semibold text-emerald-300">{liveCount}</p>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
+          <p className="text-xs uppercase tracking-[0.16em] text-white/45">Stub-backed</p>
+          <p className="mt-2 text-2xl font-semibold text-amber-300">{stubCount}</p>
+        </div>
+      </div>
+
+      <div className="mt-5 rounded-3xl border border-white/10 bg-black/10 p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={handleUseActiveRun}
+            className="rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/15"
+          >
+            Use active run{activeRunId ? ` #${activeRunId}` : ""}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleShowAllRuns}
+            className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
+          >
+            Show all runs
+          </button>
+
+          <span className="text-sm text-white/60">
+            Current scope: {runId ? `run #${runId}` : "all runs"}
+          </span>
+
+          <span className="text-sm text-white/45">
+            Unknown fetch mode items: {unknownFetchCount}
+          </span>
+
+          <span className="text-sm text-white/45">
+            Queue items using LLM: {llmUsedCount}
+          </span>
         </div>
       </div>
 
@@ -288,7 +471,7 @@ export function ReviewConsolePanel({
         ) : null}
       </div>
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+      <div className="mt-5 grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
         <div className="rounded-3xl border border-white/10 bg-black/10 p-4">
           <div className="overflow-x-auto console-scrollbar">
             <table className="min-w-full border-separate border-spacing-y-2">
@@ -296,9 +479,12 @@ export function ReviewConsolePanel({
                 <tr className="text-left text-xs uppercase tracking-[0.16em] text-white/45">
                   <th className="px-4 py-2">Select</th>
                   <th className="px-4 py-2">ID</th>
+                  <th className="px-4 py-2">Run</th>
                   <th className="px-4 py-2">Status</th>
                   <th className="px-4 py-2">Priority</th>
                   <th className="px-4 py-2">Analysis</th>
+                  <th className="px-4 py-2">Fetch mode</th>
+                  <th className="px-4 py-2">Source</th>
                   <th className="px-4 py-2">Summary</th>
                 </tr>
               </thead>
@@ -306,7 +492,7 @@ export function ReviewConsolePanel({
                 {queue.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={9}
                       className="rounded-2xl border border-white/10 bg-white/5 px-4 py-6 text-sm text-white/60"
                     >
                       No review items found for the selected filters.
@@ -314,8 +500,9 @@ export function ReviewConsolePanel({
                   </tr>
                 ) : (
                   queue.map((item) => {
-                    const analysisModeValue =
-                      String(item.metadata_json?.analysis_mode ?? "");
+                    const analysisModeValue = getAnalysisMode(item);
+                    const fetchModeValue = getFetchMode(item);
+                    const sourceName = getSourceName(item);
 
                     return (
                       <tr
@@ -338,9 +525,20 @@ export function ReviewConsolePanel({
                           />
                         </td>
                         <td className="px-4 py-3 font-medium text-white">{item.id}</td>
+                        <td className="px-4 py-3 text-white/75">{item.scrape_run_id}</td>
                         <td className="px-4 py-3">{item.review_status}</td>
                         <td className="px-4 py-3">{item.priority_label ?? "N/A"}</td>
-                        <td className="px-4 py-3">{analysisModeValue || "N/A"}</td>
+                        <td className="px-4 py-3">{analysisModeValue}</td>
+                        <td className="px-4 py-3">
+                          {fetchModeValue === "live" ? (
+                            <span className="text-emerald-300">live</span>
+                          ) : fetchModeValue === "stub" ? (
+                            <span className="text-amber-300">stub</span>
+                          ) : (
+                            <span className="text-white/70">{fetchModeValue}</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-white/75">{sourceName}</td>
                         <td className="rounded-r-2xl px-4 py-3 text-white/70">
                           {item.source_summary?.slice(0, 110) ?? "N/A"}
                         </td>
@@ -386,6 +584,22 @@ export function ReviewConsolePanel({
                     {selectedItem.reviewer_decision ?? "Pending"}
                   </p>
                 </div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-white/45">
+                    Analysis mode
+                  </p>
+                  <p className="mt-2 text-base font-semibold text-white">
+                    {getAnalysisMode(selectedItem)}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-white/45">
+                    Fetch mode
+                  </p>
+                  <p className="mt-2 text-base font-semibold text-white">
+                    {getFetchMode(selectedItem)}
+                  </p>
+                </div>
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -409,6 +623,22 @@ export function ReviewConsolePanel({
                     <span className="text-white/45">Confidence:</span>{" "}
                     {selectedItem.insight_snapshot?.confidence_score ?? "N/A"}
                   </p>
+                  <p>
+                    <span className="text-white/45">LLM attempted:</span>{" "}
+                    {selectedItem.insight_snapshot?.llm_attempted === true
+                      ? "Yes"
+                      : selectedItem.insight_snapshot?.llm_attempted === false
+                      ? "No"
+                      : "N/A"}
+                  </p>
+                  <p>
+                    <span className="text-white/45">LLM used:</span>{" "}
+                    {selectedItem.insight_snapshot?.llm_used === true
+                      ? "Yes"
+                      : selectedItem.insight_snapshot?.llm_used === false
+                      ? "No"
+                      : "N/A"}
+                  </p>
                 </div>
               </div>
 
@@ -426,8 +656,20 @@ export function ReviewConsolePanel({
                     {selectedItem.evidence_snapshot?.platform_name ?? "N/A"}
                   </p>
                   <p>
+                    <span className="text-white/45">Content type:</span>{" "}
+                    {selectedItem.evidence_snapshot?.content_type ?? "N/A"}
+                  </p>
+                  <p>
                     <span className="text-white/45">Excerpt:</span>{" "}
                     {selectedItem.evidence_snapshot?.evidence_excerpt ?? "N/A"}
+                  </p>
+                  <p>
+                    <span className="text-white/45">Published at:</span>{" "}
+                    {selectedItem.evidence_snapshot?.published_at ?? "N/A"}
+                  </p>
+                  <p>
+                    <span className="text-white/45">Source URL:</span>{" "}
+                    {selectedItem.evidence_snapshot?.source_url ?? "N/A"}
                   </p>
                 </div>
               </div>
