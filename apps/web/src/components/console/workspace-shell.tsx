@@ -533,15 +533,14 @@ export function WorkspaceShell({
 
           <section className="mt-8">
             <div className="mb-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">
-                Pipeline flow
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-blue-600">
+                Research Pipeline
               </p>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
-                Operating path
+              <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-900">
+                How it works
               </h2>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-white/58">
-                These cards translate the backend pipeline into a smaller set of
-                understandable product steps before the detailed stage tracker below.
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+                Four stages take you from raw customer posts to actionable pain point reports.
               </p>
             </div>
 
@@ -572,26 +571,26 @@ export function WorkspaceShell({
           <div className="mt-8 space-y-4">
             {(workspaceMessage || workspaceError) && (
               <div
-                className={`rounded-3xl border px-4 py-4 text-sm ${
+                className={`rounded-lg border px-4 py-3 text-sm font-medium ${
                   workspaceError
-                    ? "border-red-400/18 bg-red-400/10 text-red-100"
-                    : "border-emerald-400/18 bg-emerald-400/10 text-emerald-100"
+                    ? "border-red-200 bg-red-50 text-red-700"
+                    : "border-green-200 bg-green-50 text-green-700"
                 }`}
               >
                 {workspaceError || workspaceMessage}
               </div>
             )}
 
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <button
                 type="button"
                 onClick={handleQuickQueueAndStart}
                 disabled={
                   !currentRunId || actionLoadingKey !== null || workspaceLoading
                 }
-                className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/8 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Quick queue + start
+                ▶ Quick Start Session
               </button>
 
               <button
@@ -600,18 +599,20 @@ export function WorkspaceShell({
                   refreshWorkspace(currentRunId, "Workspace refreshed.")
                 }
                 disabled={workspaceLoading || actionLoadingKey !== null}
-                className="rounded-2xl border border-cyan-400/28 bg-cyan-400/12 px-5 py-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/18 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-lg border border-blue-300 bg-blue-50 px-5 py-2.5 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {workspaceLoading ? "Refreshing..." : "Refresh everything"}
+                {workspaceLoading ? "Refreshing…" : "↻ Refresh"}
               </button>
 
               {currentRunId ? (
-                <span className="badge badge-info self-center">
-                  Active run #{currentRunId}
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-green-500"></span>
+                  Active Session #{currentRunId}
                 </span>
               ) : (
-                <span className="badge badge-warning self-center">
-                  No active run selected
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400"></span>
+                  No session selected
                 </span>
               )}
             </div>
