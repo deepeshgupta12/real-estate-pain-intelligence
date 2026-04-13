@@ -70,7 +70,7 @@ export function RunEventsPanel({ initialEvents }: RunEventsPanelProps) {
           {events.map((event, index) => {
             const icon = getEventIcon(event.event_type);
             const label = getEventLabel(event.event_type);
-            const time = formatTime(event.timestamp);
+            const time = formatTime(event.created_at);
 
             return (
               <div key={index} className="flex gap-4 pb-4 border-b border-slate-200 last:border-b-0 last:pb-0">
@@ -78,7 +78,7 @@ export function RunEventsPanel({ initialEvents }: RunEventsPanelProps) {
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-slate-900">{label}</p>
                   <div className="flex items-center gap-2 mt-1">
-                    <p className="text-sm text-slate-600">Run #{event.run_id}</p>
+                    <p className="text-sm text-slate-600">Run #{event.scrape_run_id}</p>
                     <span className="text-slate-400">•</span>
                     <p className="text-sm text-slate-500">{time}</p>
                   </div>
