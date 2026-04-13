@@ -18,6 +18,13 @@ import {
   fetchReviewSummary,
   fetchRunDiagnostics,
   fetchRunEvents,
+  type FinalHardeningOverviewResponse,
+  type ObservabilityOverviewResponse,
+  type QueueHealthItem,
+  type ReviewQueueItem,
+  type ReviewSummaryResponse,
+  type RunDiagnosticsResponse,
+  type RunEventResponse,
 } from "@/lib/api";
 import { NavigationItem } from "@/types/navigation";
 
@@ -68,13 +75,13 @@ export default async function Home() {
   let appName = "Pain Intelligence";
   let apiPrefix = "/api/v1";
 
-  let hardeningOverview = null;
-  let observabilityOverview = null;
-  let queueHealth = [];
-  let recentEvents = [];
-  let reviewSummary = null;
-  let reviewQueue = [];
-  let initialDiagnostics = null;
+  let hardeningOverview: FinalHardeningOverviewResponse | null = null;
+  let observabilityOverview: ObservabilityOverviewResponse | null = null;
+  let queueHealth: QueueHealthItem[] = [];
+  let recentEvents: RunEventResponse[] = [];
+  let reviewSummary: ReviewSummaryResponse | null = null;
+  let reviewQueue: ReviewQueueItem[] = [];
+  let initialDiagnostics: RunDiagnosticsResponse | null = null;
 
   try {
     const [
