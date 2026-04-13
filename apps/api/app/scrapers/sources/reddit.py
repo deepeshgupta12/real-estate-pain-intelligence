@@ -1,3 +1,5 @@
+import re
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
 from app.core.config import get_settings
@@ -9,108 +11,139 @@ from app.scrapers.utils import build_dedupe_key, build_payload_snapshot, normali
 
 class RedditScraper(BaseSourceScraper):
     source_name = "reddit"
-    parser_version = "reddit-v2-live-1"
+    parser_version = "reddit-rss-v1"
 
     def _build_query(self, target_brand: str) -> str:
         return f'"{target_brand}" real estate'
 
     def _build_headers(self) -> dict[str, str]:
-        settings = get_settings()
         return {
-            "User-Agent": settings.scraper_user_agent,
-            "Accept": "application/json",
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept": "application/rss+xml, application/xml, text/xml, */*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
         }
 
-    def _build_url(self) -> str:
+    def _build_rss_url(self) -> str:
         settings = get_settings()
-        return f"{settings.scraper_reddit_base_url.rstrip('/')}/search.json"
+        return f"{settings.scraper_reddit_base_url.rstrip('/')}/search.rss"
 
-    def _fetch_live_payload(self, target_brand: str) -> dict:
+    def _fetch_live_payload(self, target_brand: str) -> str:
         settings = get_settings()
-        return RetryingHttpClient.get_json(
-            self._build_url(),
+        return RetryingHttpClient.get_text(
+            self._build_rss_url(),
             params={
                 "q": self._build_query(target_brand),
-                "limit": settings.scraper_max_items_per_source,
                 "sort": "new",
-                "restrict_sr": "0",
-                "raw_json": "1",
+                "limit": settings.scraper_max_items_per_source,
             },
             headers=self._build_headers(),
         )
 
-    def _build_source_url(self, permalink: str | None) -> str | None:
-        if not permalink:
-            return None
-        return f"https://www.reddit.com{permalink}"
-
-    def _parse_live_items(self, payload: dict, target_brand: str) -> list[ScrapedItem]:
+    def _parse_rss_feed(self, xml_text: str, target_brand: str) -> list[ScrapedItem]:
         fetched_at = datetime.now(timezone.utc)
         source_query = self._build_query(target_brand)
-        children = (payload.get("data") or {}).get("children") or []
 
-        parsed_items: list[ScrapedItem] = []
+        try:
+            root = ET.fromstring(xml_text)
+        except ET.ParseError:
+            return []
 
-        for child in children:
-            data = child.get("data") or {}
+        # Reddit RSS uses Atom namespace
+        ns = {"atom": "http://www.w3.org/2005/Atom"}
+        entries = root.findall("atom:entry", ns)
+        if not entries:
+            # Try without namespace
+            entries = root.findall(".//entry")
 
-            title = (data.get("title") or "").strip()
-            selftext = (data.get("selftext") or "").strip()
-            combined_text = "\n\n".join(part for part in [title, selftext] if part).strip()
-            normalized_text = normalize_whitespace(combined_text)
+        parsed_items = []
+        settings = get_settings()
 
-            if not normalized_text:
+        for entry in entries[:settings.scraper_max_items_per_source]:
+            # Extract title
+            title_el = entry.find("atom:title", ns) or entry.find("title")
+            title = (title_el.text or "").strip() if title_el is not None else ""
+
+            # Extract content/summary
+            content_el = (
+                entry.find("atom:content", ns) or entry.find("atom:summary", ns)
+                or entry.find("content") or entry.find("summary")
+            )
+            content_html = (content_el.text or "") if content_el is not None else ""
+            # Strip HTML tags from content
+            content_text = re.sub(r'<[^>]+>', ' ', content_html).strip()
+            content_text = normalize_whitespace(content_text)
+
+            combined = "\n\n".join(p for p in [title, content_text] if p).strip()
+            if not combined:
                 continue
 
-            external_id = data.get("id")
-            source_url = self._build_source_url(data.get("permalink"))
+            # Extract URL from link element
+            link_el = entry.find("atom:link", ns) or entry.find("link")
+            source_url = None
+            if link_el is not None:
+                source_url = link_el.get("href") or link_el.text
+
+            # Extract external_id from URL
+            external_id = None
+            if source_url:
+                parts = [p for p in source_url.rstrip("/").split("/") if p]
+                external_id = parts[-1] if parts else None
+
+            # Extract author
+            author_el = entry.find("atom:author/atom:name", ns) or entry.find("author/name")
+            author = (author_el.text or "").strip() if author_el is not None else None
+
+            # Extract published date
+            updated_el = entry.find("atom:updated", ns) or entry.find("updated")
             published_at = None
-            if data.get("created_utc") is not None:
-                published_at = datetime.fromtimestamp(float(data["created_utc"]), tz=timezone.utc)
+            if updated_el is not None and updated_el.text:
+                try:
+                    published_at = datetime.fromisoformat(updated_el.text.replace("Z", "+00:00"))
+                except ValueError:
+                    pass
 
-            raw_payload = {
-                "id": data.get("id"),
-                "name": data.get("name"),
-                "subreddit": data.get("subreddit"),
-                "title": data.get("title"),
-                "selftext": data.get("selftext"),
-                "author": data.get("author"),
-                "permalink": data.get("permalink"),
-                "score": data.get("score"),
-                "num_comments": data.get("num_comments"),
-                "created_utc": data.get("created_utc"),
-            }
+            # Extract subreddit from category
+            category_el = entry.find("atom:category", ns) or entry.find("category")
+            subreddit = category_el.get("term", "") if category_el is not None else ""
 
-            parsed_items.append(
-                ScrapedItem(
+            parsed_items.append(ScrapedItem(
+                source_name=self.source_name,
+                platform_name=target_brand,
+                content_type="post",
+                external_id=external_id,
+                author_name=author,
+                source_url=source_url,
+                published_at=published_at,
+                fetched_at=fetched_at,
+                source_query=source_query,
+                parser_version=self.parser_version,
+                dedupe_key=build_dedupe_key(
                     source_name=self.source_name,
-                    platform_name=target_brand,
-                    content_type="post",
                     external_id=external_id,
-                    author_name=data.get("author"),
                     source_url=source_url,
-                    published_at=published_at,
-                    fetched_at=fetched_at,
-                    source_query=source_query,
-                    parser_version=self.parser_version,
-                    dedupe_key=build_dedupe_key(
-                        source_name=self.source_name,
-                        external_id=external_id,
-                        source_url=source_url,
-                        raw_text=normalized_text,
-                    ),
-                    raw_payload_json=build_payload_snapshot(raw_payload),
-                    raw_text=combined_text,
-                    cleaned_text=normalized_text,
-                    language="en",
-                    metadata_json={
-                        "subreddit": data.get("subreddit"),
-                        "score": data.get("score"),
-                        "num_comments": data.get("num_comments"),
-                        "fetch_mode": "live",
-                    },
-                )
-            )
+                    raw_text=combined,
+                ),
+                raw_payload_json=build_payload_snapshot({
+                    "title": title,
+                    "content": content_text,
+                    "author": author,
+                    "source_url": source_url,
+                    "subreddit": subreddit,
+                }),
+                raw_text=combined,
+                cleaned_text=combined,
+                language="en",
+                metadata_json={
+                    "subreddit": subreddit,
+                    "fetch_mode": "live",
+                    "source_format": "rss",
+                },
+            ))
 
         return parsed_items
 
@@ -186,8 +219,8 @@ class RedditScraper(BaseSourceScraper):
             )
 
         try:
-            payload = self._fetch_live_payload(target_brand)
-            items = self._parse_live_items(payload, target_brand)
+            xml_text = self._fetch_live_payload(target_brand)
+            items = self._parse_rss_feed(xml_text, target_brand)
             if items:
                 return items
 

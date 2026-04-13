@@ -1,8 +1,13 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+BASE_DIR = Path(__file__).resolve().parents[2]
+ENV_FILE_PATH = BASE_DIR / ".env"
 
 
 class Settings(BaseSettings):
@@ -55,24 +60,29 @@ class Settings(BaseSettings):
 
     embedding_provider: Literal["deterministic_hash"] = "deterministic_hash"
     embedding_model_name: str = "hash-embedding-v1"
-    embedding_dimensions: int = 64
+    embedding_dimensions: int = 128
     retrieval_vector_distance: Literal["cosine"] = "cosine"
     retrieval_search_default_top_k: int = 5
 
     intelligence_mode: Literal["deterministic", "hybrid_llm"] = "deterministic"
     intelligence_enable_llm: bool = False
     intelligence_llm_provider: Literal["openai"] = "openai"
-    intelligence_openai_model: str = "gpt-5.4"
+    intelligence_openai_model: str = "gpt-4o"
     intelligence_llm_timeout_seconds: float = 30.0
     intelligence_llm_max_retries: int = 2
     openai_api_key: str | None = None
 
-    observability_stale_run_seconds: int = 900
+    api_key_enabled: bool = False
+    api_key_secret: str | None = None
+
+    scraper_reddit_rss_enabled: bool = True
+
+    observability_stale_run_seconds: int = 300
     observability_recent_failure_window_minutes: int = 60
     observability_recent_events_window_minutes: int = 60
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(ENV_FILE_PATH),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",

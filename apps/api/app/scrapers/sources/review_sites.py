@@ -1,4 +1,6 @@
+import random
 import re
+import time
 from datetime import datetime, timezone
 
 from app.core.config import get_settings
@@ -22,32 +24,58 @@ class ReviewSitesScraper(BaseSourceScraper):
         return f"{target_brand} reviews"
 
     def _build_headers(self) -> dict[str, str]:
-        settings = get_settings()
         return {
-            "User-Agent": settings.scraper_user_agent,
-            "Accept": "text/html,application/xhtml+xml",
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9,hi;q=0.8",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Cache-Control": "max-age=0",
         }
 
-    def _build_review_url(self, target_brand: str) -> str:
+    def _build_review_urls(self, target_brand: str) -> list[str]:
+        """Try multiple URL patterns if first fails."""
         settings = get_settings()
         slug = slugify_identifier(target_brand)
-        return f"{settings.scraper_review_sites_base_url.rstrip('/')}/{slug}.com"
+        return [
+            f"{settings.scraper_review_sites_base_url.rstrip('/')}/{slug}.com",
+            f"{settings.scraper_review_sites_base_url.rstrip('/')}/{slug}",
+            f"https://www.ambitionbox.com/reviews/{slug}-reviews",
+        ]
 
     def _fetch_reviews_html(self, target_brand: str) -> str:
-        return RetryingHttpClient.get_text(
-            self._build_review_url(target_brand),
-            headers=self._build_headers(),
-        )
+        urls = self._build_review_urls(target_brand)
+        last_exception: Exception | None = None
+
+        for url in urls:
+            try:
+                # Add delay before fetching
+                time.sleep(random.uniform(1.0, 2.5))
+                return RetryingHttpClient.get_text(
+                    url,
+                    headers=self._build_headers(),
+                )
+            except Exception as exc:
+                last_exception = exc
+                continue
+
+        if last_exception:
+            raise last_exception
+        raise RuntimeError(f"Failed to fetch reviews for {target_brand} from all URLs")
 
     def _parse_live_items(self, html_text: str, target_brand: str) -> list[ScrapedItem]:
         fetched_at = datetime.now(timezone.utc)
         source_query = self._build_query(target_brand)
-        source_url = self._build_review_url(target_brand)
+        source_url = self._build_review_urls(target_brand)[0]
 
         pattern = re.compile(
-            r'<article.*?(?:data-service-review-id|class="[^"]*review[^"]*").*?>.*?'
+            r'<article.*?(?:data-service-review-id|class="[^"]*review[^"]*"|data-review-content-text).*?>.*?'
             r'(?:<h2.*?>.*?</h2>)?.*?'
-            r'(?P<body><p[^>]*>(.*?)</p>)',
+            r'(?P<body><p[^>]*>(.*?)</p>|data-review-content-text[^>]*>(.*?)</)',
             flags=re.DOTALL | re.IGNORECASE,
         )
 

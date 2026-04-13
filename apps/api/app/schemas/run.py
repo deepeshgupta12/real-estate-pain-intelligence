@@ -1,6 +1,7 @@
+import re
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ScrapeRunCreateRequest(BaseModel):
@@ -16,6 +17,26 @@ class ScrapeRunCreateRequest(BaseModel):
     started_at: datetime | None = None
     last_heartbeat_at: datetime | None = None
     completed_at: datetime | None = None
+
+    @field_validator("target_brand")
+    @classmethod
+    def validate_target_brand(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("target_brand cannot be empty")
+        if len(v) > 100:
+            raise ValueError("target_brand must be 100 characters or less")
+        if re.search(r'[<>"\';\\]', v):
+            raise ValueError("target_brand contains invalid characters")
+        return v
+
+    @field_validator("source_name")
+    @classmethod
+    def validate_source_name(cls, v: str) -> str:
+        allowed = {"reddit", "youtube", "app_reviews", "x_posts", "review_sites"}
+        if v not in allowed:
+            raise ValueError(f"source_name must be one of: {', '.join(sorted(allowed))}")
+        return v
 
 
 class ScrapeRunResponse(BaseModel):

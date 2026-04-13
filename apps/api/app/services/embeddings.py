@@ -1,22 +1,54 @@
 import hashlib
 import math
 import re
+from typing import Sequence
 
 from app.core.config import get_settings
+
+# Domain-specific semantic term groups for Indian real estate
+# Terms in the same group will have similar embedding directions
+SEMANTIC_GROUPS: list[tuple[str, ...]] = [
+    # Pain: listing quality
+    ("stale", "outdated", "old", "wrong", "incorrect", "inaccurate", "listing", "inventory", "fake"),
+    # Pain: response/callback issues
+    ("callback", "response", "reply", "contacted", "agent", "broker", "followup", "ignored"),
+    # Pain: pricing/hidden costs
+    ("price", "cost", "expensive", "hidden", "charges", "fees", "brokerage", "overpriced"),
+    # Pain: platform UX
+    ("filter", "search", "ui", "app", "website", "slow", "crash", "load", "navigation", "interface"),
+    # Pain: trust/fraud
+    ("fraud", "fake", "scam", "cheat", "mislead", "trust", "verified", "genuine"),
+    # Positive signals
+    ("good", "great", "excellent", "satisfied", "happy", "recommend", "useful", "helpful"),
+    # Brands: competitors
+    ("squareyards", "square", "yards", "99acres", "magicbricks", "housing", "nobroker", "commonfloor"),
+    # Property types
+    ("flat", "apartment", "villa", "plot", "commercial", "residential", "bhk", "studio"),
+    # Location terms India
+    ("mumbai", "delhi", "bangalore", "pune", "hyderabad", "chennai", "kolkata", "gurgaon", "noida"),
+    # Transaction stages
+    ("buy", "rent", "lease", "sell", "invest", "purchase", "booking", "registration"),
+]
+
+# Map each term to its group index
+TERM_GROUP: dict[str, int] = {}
+for _group_idx, _group_terms in enumerate(SEMANTIC_GROUPS):
+    for _term in _group_terms:
+        TERM_GROUP[_term] = _group_idx
 
 
 class EmbeddingService:
     @staticmethod
     def _tokenize(text: str) -> list[str]:
         cleaned = re.sub(r"[^a-zA-Z0-9\u0900-\u097F\s]+", " ", text.lower())
-        return [token for token in cleaned.split() if token]
+        return [token for token in cleaned.split() if len(token) > 1]
 
     @staticmethod
     def _normalize(vector: list[float]) -> list[float]:
-        norm = math.sqrt(sum(value * value for value in vector))
+        norm = math.sqrt(sum(v * v for v in vector))
         if norm == 0:
             return vector
-        return [value / norm for value in vector]
+        return [v / norm for v in vector]
 
     @staticmethod
     def embed_text(text: str) -> list[float]:
@@ -28,14 +60,36 @@ class EmbeddingService:
         if not tokens:
             return vector
 
-        for token in tokens:
-            digest = hashlib.sha256(token.encode("utf-8")).digest()
+        total_tokens = len(tokens)
 
+        for position, token in enumerate(tokens):
+            # Position weight: earlier tokens (title-like) get 1.5x weight
+            position_weight = 1.5 if position < max(1, total_tokens // 5) else 1.0
+
+            # Semantic group boost: if term is in a known group, boost that dimension cluster
+            group_idx = TERM_GROUP.get(token)
+
+            # Hash-based bucket assignment
+            digest = hashlib.sha256(token.encode("utf-8")).digest()
             bucket = int.from_bytes(digest[:4], "big") % dimensions
             sign = 1.0 if digest[4] % 2 == 0 else -1.0
             magnitude = 1.0 + ((digest[5] % 7) / 10.0)
 
-            vector[bucket] += sign * magnitude
+            vector[bucket] += sign * magnitude * position_weight
+
+            # If token belongs to a semantic group, also activate the group's anchor bucket
+            if group_idx is not None:
+                # Use group index to create a deterministic anchor bucket
+                anchor_bucket = (group_idx * 7 + 13) % dimensions
+                vector[anchor_bucket] += sign * magnitude * 2.0 * position_weight
+
+        # Bigram features: pairs of adjacent tokens
+        for i in range(len(tokens) - 1):
+            bigram = f"{tokens[i]}_{tokens[i+1]}"
+            digest = hashlib.sha256(bigram.encode("utf-8")).digest()
+            bucket = int.from_bytes(digest[:4], "big") % dimensions
+            sign = 1.0 if digest[4] % 2 == 0 else -1.0
+            vector[bucket] += sign * 0.5  # Lower weight for bigrams
 
         return EmbeddingService._normalize(vector)
 
@@ -44,15 +98,12 @@ class EmbeddingService:
         return EmbeddingService.embed_text(query)
 
     @staticmethod
-    def cosine_similarity(vector_a: list[float], vector_b: list[float]) -> float:
+    def cosine_similarity(vector_a: Sequence[float], vector_b: Sequence[float]) -> float:
         if not vector_a or not vector_b or len(vector_a) != len(vector_b):
             return 0.0
-
         dot_product = sum(a * b for a, b in zip(vector_a, vector_b))
         norm_a = math.sqrt(sum(a * a for a in vector_a))
         norm_b = math.sqrt(sum(b * b for b in vector_b))
-
         if norm_a == 0 or norm_b == 0:
             return 0.0
-
         return dot_product / (norm_a * norm_b)
