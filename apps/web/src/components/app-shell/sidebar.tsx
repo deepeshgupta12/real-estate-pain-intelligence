@@ -16,13 +16,13 @@ export function Sidebar({ items }: SidebarProps) {
             <p className="text-sm font-semibold text-white">
               Pain Intelligence
             </p>
-            <p className="text-xs text-white/55">Operational Console</p>
+            <p className="text-xs text-white/55">Action Workspace</p>
           </div>
         </div>
 
         <p className="mt-4 text-sm leading-6 text-white/65">
-          Public Voice-of-Customer intelligence platform for Indian real-estate
-          brands and competitive product analysis.
+          Create a run, move it through each stage, review output quality, and
+          still keep the live monitoring view in the same place.
         </p>
       </div>
 
@@ -63,14 +63,14 @@ export function Sidebar({ items }: SidebarProps) {
 
       <div className="mt-auto rounded-3xl border border-white/10 bg-white/5 p-4">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">
-          Current stage
+          Current build focus
         </p>
         <p className="mt-3 text-sm font-semibold text-white">
-          Full frontend product console
+          End-to-end pipeline operations
         </p>
         <p className="mt-2 text-sm leading-6 text-white/55">
-          Live observability, diagnostics, queue health, and review operations
-          are now surfaced inside the web console.
+          This step adds run creation, guided stage actions, friendly wording,
+          and a simple progress tracker on top of the existing live console.
         </p>
       </div>
     </aside>

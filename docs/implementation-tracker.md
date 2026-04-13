@@ -495,5 +495,56 @@ Status: Completed
 - Pagination is basic and can be expanded later
 - Additional sections for evidence explorer, retrieval explorer, and export center can be added in later steps
 
-#### Next step after completion
-- Step 26 — Multi-tenant architecture foundation
+### Step 26A — Full pipeline action workspace
+Status: In Progress
+
+#### Delivered in this implementation
+- Frontend run setup section added with:
+  - create new run
+  - load existing run
+  - friendlier labels and placeholders
+- Current run summary section added with:
+  - basic run details
+  - readiness snapshot
+  - easier wording
+- Pipeline progress tracker added with:
+  - human-friendly stage names
+  - completed / next focus / pending states
+- Pipeline action section added for:
+  - start data collection
+  - clean text
+  - prepare language support
+  - generate insights
+  - prepare search-ready knowledge
+  - create review list
+  - prepare Notion sync
+  - run Notion sync
+  - create files
+  - check final readiness
+- Workspace-wide refresh flow added so monitoring sections can be refreshed after actions
+- Info-tip component added to explain terms in simple language
+- Existing queue health, diagnostics, events, and review console remain available below the new action workspace
+- Existing backend APIs are reused for Step 26A, so no new backend endpoints are required
+
+#### Implemented files
+- `apps/web/src/app/page.tsx`
+- `apps/web/src/lib/api.ts`
+- `apps/web/src/components/app-shell/sidebar.tsx`
+- `apps/web/src/components/app-shell/topbar.tsx`
+- `apps/web/src/components/ui/info-tip.tsx`
+- `apps/web/src/components/console/workspace-shell.tsx`
+- `apps/web/src/components/console/run-setup-panel.tsx`
+- `apps/web/src/components/console/current-run-panel.tsx`
+- `apps/web/src/components/console/pipeline-progress-panel.tsx`
+- `apps/web/src/components/console/pipeline-actions-panel.tsx`
+- `docs/implementation-tracker.md`
+
+#### Test notes
+- This step should allow the frontend to operate the run flow instead of only observing it
+- Existing backend action endpoints are expected to be available and reachable from the browser
+- Review moderation should keep working as before
+- Notion sync execution still depends on backend configuration and approved review items
+- Export generation still depends on evidence existing for the selected run
+
+#### Next step after confirmation
+- Step 26B — optional deeper output workspaces such as evidence explorer, retrieval explorer, export center, and richer stage-level result views

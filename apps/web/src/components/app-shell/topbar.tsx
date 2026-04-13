@@ -15,11 +15,11 @@ export function Topbar({ environment, version, apiStatus }: TopbarProps) {
             Real Estate Pain Point Intelligence Platform
           </p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white">
-            Product Intelligence Workspace
+            Full Pipeline Action Workspace
           </h1>
           <p className="mt-1 text-sm text-white/55">
-            Observability, diagnostics, review workflows, and decision support
-            in one console.
+            Create runs, move them stage by stage, inspect output, and review
+            quality from one workspace.
           </p>
         </div>
 
@@ -27,7 +27,7 @@ export function Topbar({ environment, version, apiStatus }: TopbarProps) {
           <AppChip label={`Env: ${environment}`} />
           <AppChip label={`Version: ${version}`} />
           <AppChip label={`API: ${apiStatus}`} />
-          <AppChip label="Step 25" />
+          <AppChip label="Step 26A" />
         </div>
       </div>
     </header>
