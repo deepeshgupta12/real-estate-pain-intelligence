@@ -109,6 +109,16 @@ class NotionSyncService:
         return [{"type": "text", "text": {"content": trimmed}}]
 
     @staticmethod
+    def _paragraph_block(content: str) -> dict[str, Any]:
+        return {
+            "object": "block",
+            "type": "paragraph",
+            "paragraph": {
+                "rich_text": NotionSyncService._rich_text(content),
+            },
+        }
+
+    @staticmethod
     def _title_text(payload: dict[str, Any]) -> str:
         settings = get_settings()
         brand = payload["run"]["target_brand"]
@@ -117,15 +127,35 @@ class NotionSyncService:
         return f"{settings.notion_default_title_prefix} | {brand} | {label} | Review {review_id}"
 
     @staticmethod
+    def _safe_select_name(value: str | None, fallback: str) -> str:
+        cleaned = (value or "").strip()
+        return cleaned if cleaned else fallback
+
+    @staticmethod
     def _build_database_properties(payload: dict[str, Any]) -> dict[str, Any]:
         settings = get_settings()
 
         title = NotionSyncService._title_text(payload)
-        status_value = payload["human_review_item"].get("review_status") or "reviewed"
-        priority_value = payload["human_review_item"].get("priority_label") or "Unspecified"
-        brand_value = payload["run"].get("target_brand") or "Unknown"
-        source_value = payload["raw_evidence"].get("source_name") or "Unknown"
-        decision_value = payload["human_review_item"].get("reviewer_decision") or "approved"
+        status_value = NotionSyncService._safe_select_name(
+            payload["human_review_item"].get("review_status"),
+            "Not started",
+        )
+        priority_value = NotionSyncService._safe_select_name(
+            payload["human_review_item"].get("priority_label"),
+            "medium",
+        )
+        brand_value = NotionSyncService._safe_select_name(
+            payload["run"].get("target_brand"),
+            "Unknown",
+        )
+        source_value = NotionSyncService._safe_select_name(
+            payload["raw_evidence"].get("source_name"),
+            "Unknown",
+        )
+        decision_value = NotionSyncService._safe_select_name(
+            payload["human_review_item"].get("reviewer_decision"),
+            "approved",
+        )
 
         return {
             settings.notion_title_property_name: {
@@ -137,19 +167,19 @@ class NotionSyncService:
                 ]
             },
             settings.notion_status_property_name: {
-                "rich_text": NotionSyncService._rich_text(status_value),
+                "select": {"name": status_value},
             },
             settings.notion_priority_property_name: {
-                "rich_text": NotionSyncService._rich_text(priority_value),
+                "select": {"name": priority_value},
             },
             settings.notion_brand_property_name: {
-                "rich_text": NotionSyncService._rich_text(brand_value),
+                "select": {"name": brand_value},
             },
             settings.notion_source_property_name: {
-                "rich_text": NotionSyncService._rich_text(source_value),
+                "select": {"name": source_value},
             },
             settings.notion_decision_property_name: {
-                "rich_text": NotionSyncService._rich_text(decision_value),
+                "select": {"name": decision_value},
             },
         }
 
@@ -158,7 +188,9 @@ class NotionSyncService:
         sections = [
             (
                 "Pain Point Summary",
-                payload["agent_insight"].get("pain_point_summary") or payload["human_review_item"].get("source_summary") or "-",
+                payload["agent_insight"].get("pain_point_summary")
+                or payload["human_review_item"].get("source_summary")
+                or "-",
             ),
             (
                 "Root Cause Hypothesis",
@@ -202,15 +234,7 @@ class NotionSyncService:
                     },
                 }
             )
-            children.append(
-                {
-                    "object": "block",
-                    "type": "paragraph",
-                    "paragraph": {
-                        "rich_text": NotionSyncService._rich_text(body),
-                    },
-                }
-            )
+            children.append(NotionSyncService._paragraph_block(body))
         return children
 
     @staticmethod
@@ -351,6 +375,12 @@ class NotionSyncService:
             )
 
         payload = job.sync_payload_json or {}
+        if not payload:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Notion sync job {sync_job_id} has empty sync payload",
+            )
+
         children = NotionSyncService._build_children_blocks(payload)
         client = NotionClient()
 

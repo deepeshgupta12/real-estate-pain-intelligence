@@ -34,8 +34,21 @@ class NotionClient:
                         headers=self._headers(),
                         json=payload,
                     )
-                    response.raise_for_status()
+
+                    if response.is_error:
+                        response_text: str
+                        try:
+                            response_text = response.text
+                        except Exception:
+                            response_text = "<unable to read response body>"
+
+                        raise RuntimeError(
+                            f"Failed Notion request for path {path}: "
+                            f"status={response.status_code}, body={response_text}"
+                        )
+
                     return response.json()
+
             except Exception as exc:
                 last_exception = exc
                 if attempt >= self.settings.notion_max_retries:
@@ -43,7 +56,10 @@ class NotionClient:
                 sleep_seconds = self.settings.notion_retry_backoff_seconds * (attempt + 1)
                 time.sleep(sleep_seconds)
 
-        raise RuntimeError(f"Failed Notion request for path {path}") from last_exception
+        if last_exception is not None:
+            raise RuntimeError(str(last_exception)) from last_exception
+
+        raise RuntimeError(f"Failed Notion request for path {path}")
 
     def create_database_page(
         self,
