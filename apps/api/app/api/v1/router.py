@@ -16,6 +16,8 @@ from app.api.v1.run_events import router as run_events_router
 from app.api.v1.runs import router as runs_router
 from app.api.v1.scrape_execution import router as scrape_execution_router
 from app.api.v1.system import router as system_router
+from app.api.v1.trending import router as trending_router
+from app.api.v1.organizations import router as organizations_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)
@@ -34,3 +36,5 @@ api_router.include_router(human_review_router)
 api_router.include_router(notion_sync_router)
 api_router.include_router(export_router)
 api_router.include_router(final_hardening_router)
+api_router.include_router(trending_router)
+api_router.include_router(organizations_router)

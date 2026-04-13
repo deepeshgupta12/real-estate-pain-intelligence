@@ -72,6 +72,15 @@ class Settings(BaseSettings):
     intelligence_llm_max_retries: int = 2
     openai_api_key: str | None = None
 
+    # Intelligence confidence thresholds
+    intelligence_confidence_threshold: str = "medium"  # "low" | "medium" | "high"
+    intelligence_llm_cache_enabled: bool = True  # Cache LLM responses by content hash
+    intelligence_llm_cache_ttl_seconds: int = 86400  # 24hr cache TTL
+
+    # LLM cost optimization
+    intelligence_llm_model: str = "gpt-4o-mini"  # Default to cost-efficient model
+    intelligence_llm_max_tokens: int = 500
+
     api_key_enabled: bool = False
     api_key_secret: str | None = None
 
