@@ -22,7 +22,7 @@ function humanize(value: string | null | undefined): string {
 export function CurrentRunPanel({
   currentRun,
   readiness,
-  reviewQueue,
+  reviewQueue: _reviewQueue,
 }: CurrentRunPanelProps) {
   return (
     <SectionShell

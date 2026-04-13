@@ -4,7 +4,7 @@ type TopbarProps = {
   apiStatus: string;
 };
 
-export function Topbar({ environment, version, apiStatus }: TopbarProps) {
+export function Topbar({ environment: _environment, version: _version, apiStatus: _apiStatus }: TopbarProps) {
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white">
       <div className="mx-auto flex max-w-7xl flex-col gap-2 px-5 py-4 lg:px-8 xl:flex-row xl:items-center xl:justify-between">

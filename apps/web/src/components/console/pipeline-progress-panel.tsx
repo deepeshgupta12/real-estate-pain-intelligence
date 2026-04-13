@@ -9,11 +9,6 @@ type PipelineProgressPanelProps = {
   readiness: RunReadinessResponse | null;
 };
 
-function humanize(value: string | null | undefined): string {
-  if (!value) return "Unknown";
-  return value.replaceAll("_", " ");
-}
-
 const steps = [
   { stage: "created", label: "Created", icon: "📋" },
   { stage: "dispatched", label: "Dispatched", icon: "🚀" },
@@ -60,8 +55,6 @@ export function PipelineProgressPanel({
           {steps.map((step, index) => {
             const isCompleted = index < currentStageIndex;
             const isCurrent = index === currentStageIndex;
-            const isPending = index > currentStageIndex;
-
             return (
               <div key={step.stage} className="flex items-center gap-4">
                 <div

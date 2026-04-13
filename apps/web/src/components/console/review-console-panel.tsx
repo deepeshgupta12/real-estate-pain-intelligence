@@ -160,7 +160,7 @@ export function ReviewConsolePanel({
 
       const decision = action === "approve" ? "approved" : "rejected";
       const updatedQueue = queue.map((item) =>
-        selectedIds.includes(item.id) ? { ...item, reviewer_decision: decision as any } : item
+        selectedIds.includes(item.id) ? { ...item, reviewer_decision: decision } : item
       );
       setQueue(updatedQueue);
       setSelectedIds([]);

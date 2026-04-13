@@ -40,12 +40,12 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install -e ".[dev]" --break-system-packages 2>/dev/null || pip install -e .
+        run: |
+          pip install -e ".[dev]"
+          pip install ruff pytest-timeout
 
       - name: Run linter (ruff)
-        run: |
-          pip install ruff 2>/dev/null || true
-          ruff check app/ --ignore E501 || echo "Linting warnings found"
+        run: ruff check app/ --ignore E501 || echo "Linting warnings found"
 
       - name: Run tests
         env:
@@ -53,7 +53,9 @@ jobs:
           APP_ENV: test
           SCRAPER_ENABLE_LIVE_FETCH: "false"
           JWT_SECRET_KEY: test-secret-key-not-for-production
-        run: pytest tests/ -v --tb=short --timeout=60
+          INTELLIGENCE_ENABLE_LLM: "false"
+          AGENT_ORCHESTRATOR_ENABLED: "false"
+        run: pytest tests/ -v --tb=short --timeout=60 -x
 
   frontend-ci:
     name: Frontend — Lint & Build
@@ -75,6 +77,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: ESLint check
+        run: npm run lint || echo "ESLint warnings found (non-blocking)"
 
       - name: TypeScript check
         run: npx tsc --noEmit || echo "TypeScript warnings found"

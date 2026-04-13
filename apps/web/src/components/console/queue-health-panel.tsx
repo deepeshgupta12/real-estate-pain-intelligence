@@ -36,7 +36,7 @@ export function QueueHealthPanel({ queueItems }: QueueHealthPanelProps) {
               <div key={item.run_id} className="card p-4 flex items-center justify-between">
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-slate-900">Run #{item.run_id}</p>
-                  <p className="text-sm text-slate-600 truncate">{item.brand_identifier}</p>
+                  <p className="text-sm text-slate-600 truncate">{item.target_brand} · {item.source_name}</p>
                 </div>
                 <div className="shrink-0 ml-4">
                   <span className="status-pill info">{humanize(item.status)}</span>

@@ -34,7 +34,7 @@ export function RunSetupPanel({
 }: RunSetupPanelProps) {
   const [sourceName, setSourceName] = useState(availableSources[0] ?? "reddit");
   const [brandName, setBrandName] = useState("");
-  const [startType, setStartType] = useState("manual");
+  const [startType] = useState("manual");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState("");
 
