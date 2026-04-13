@@ -1,7 +1,10 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.agent_insight import AgentInsight
 from app.models.export_job import ExportJob
 from app.models.human_review_item import HumanReviewItem
@@ -222,4 +225,70 @@ class FinalHardeningService:
                 select(func.count(ExportJob.id)),
             ),
             "run_events_total": FinalHardeningService._count(db, select(func.count(RunEvent.id))),
+        }
+
+    @staticmethod
+    def build_observability_overview(db: Session) -> dict[str, object]:
+        settings = get_settings()
+        now = datetime.now(timezone.utc)
+        stale_cutoff = now - timedelta(seconds=settings.observability_stale_run_seconds)
+        recent_failure_cutoff = now - timedelta(
+            minutes=settings.observability_recent_failure_window_minutes
+        )
+        recent_event_cutoff = now - timedelta(
+            minutes=settings.observability_recent_events_window_minutes
+        )
+
+        all_runs = db.scalars(select(ScrapeRun)).all()
+        active_runs = [run for run in all_runs if run.status in {"queued", "running"}]
+
+        stale_active_runs_count = 0
+        for run in active_runs:
+            if run.last_heartbeat_at is not None and run.last_heartbeat_at < stale_cutoff:
+                stale_active_runs_count += 1
+
+        recent_failed_runs_count = 0
+        for run in all_runs:
+            if run.status != "failed":
+                continue
+            reference_time = run.last_heartbeat_at or run.completed_at or run.created_at
+            if reference_time >= recent_failure_cutoff:
+                recent_failed_runs_count += 1
+
+        recent_events_count = FinalHardeningService._count(
+            db,
+            select(func.count(RunEvent.id)).where(RunEvent.created_at >= recent_event_cutoff),
+        )
+
+        review_backlog_count = FinalHardeningService._count(
+            db,
+            select(func.count(HumanReviewItem.id)).where(
+                HumanReviewItem.review_status == "pending_review"
+            ),
+        )
+
+        status_rows = db.execute(
+            select(ScrapeRun.status, func.count(ScrapeRun.id)).group_by(ScrapeRun.status)
+        ).all()
+        runs_by_status = {str(status): int(count) for status, count in status_rows}
+
+        stage_rows = db.execute(
+            select(ScrapeRun.pipeline_stage, func.count(ScrapeRun.id)).group_by(
+                ScrapeRun.pipeline_stage
+            )
+        ).all()
+        runs_by_stage = {str(stage): int(count) for stage, count in stage_rows}
+
+        return {
+            "runs_total": len(list(all_runs)),
+            "active_queue_count": len(active_runs),
+            "stale_active_runs_count": stale_active_runs_count,
+            "recent_failed_runs_count": recent_failed_runs_count,
+            "recent_events_count": recent_events_count,
+            "review_backlog_count": review_backlog_count,
+            "run_events_total": FinalHardeningService._count(
+                db, select(func.count(RunEvent.id))
+            ),
+            "runs_by_status": runs_by_status,
+            "runs_by_stage": runs_by_stage,
         }

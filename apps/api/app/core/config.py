@@ -67,6 +67,10 @@ class Settings(BaseSettings):
     intelligence_llm_max_retries: int = 2
     openai_api_key: str | None = None
 
+    observability_stale_run_seconds: int = 900
+    observability_recent_failure_window_minutes: int = 60
+    observability_recent_events_window_minutes: int = 60
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

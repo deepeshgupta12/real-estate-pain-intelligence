@@ -20,6 +20,7 @@ class FinalHardeningCounts(BaseModel):
     multilingual_count: int
     insight_count: int
     retrieval_count: int
+    embedded_retrieval_count: int
     review_count: int
     pending_review_count: int
     approved_review_count: int
@@ -52,3 +53,15 @@ class SystemOverviewResponse(BaseModel):
     notion_jobs_total: int
     export_jobs_total: int
     run_events_total: int
+
+
+class ObservabilityOverviewResponse(BaseModel):
+    runs_total: int
+    active_queue_count: int
+    stale_active_runs_count: int
+    recent_failed_runs_count: int
+    recent_events_count: int
+    review_backlog_count: int
+    run_events_total: int
+    runs_by_status: dict[str, int]
+    runs_by_stage: dict[str, int]

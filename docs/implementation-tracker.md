@@ -1070,25 +1070,90 @@ Status: Completed
 - Step 23 — Review console backend readiness
 
 ### Step 23 — Review console backend readiness
-Status: In Progress
+Status: Completed
 
-#### Planned delivery
-- Review summary endpoint for frontend console headers and dashboard stats
-- Enriched queue listing with filters for:
+#### Delivered
+- Review summary endpoint added for frontend console headers and dashboard stats
+- Enriched queue listing added with filters for:
   - review status
   - reviewer decision
   - priority
   - analysis mode
-- Review detail endpoint with joined insight and evidence context
-- Bulk approve and bulk reject endpoints
-- Review queue payload enrichment using insight and evidence metadata
+- Review detail endpoint added with joined insight and evidence context
+- Bulk approve and bulk reject endpoints added
+- Review queue payload enriched using insight and evidence metadata
 - Final hardening readiness upgraded with review-console-specific checks and counts
 
-#### Planned files
+#### Implemented files
 - `apps/api/app/schemas/human_review.py`
 - `apps/api/app/api/v1/human_review.py`
 - `apps/api/app/services/human_review.py`
 - `apps/api/app/services/final_hardening.py`
 - `apps/api/tests/test_human_review.py`
+- `apps/api/tests/test_final_hardening.py`
+- `docs/implementation-tracker.md`
+
+#### Test notes
+- Pytest passes with Step 23 backend review-console coverage included
+- Review summary endpoint works correctly
+- Enriched queue listing works with filters and joined detail payloads
+- Review detail endpoint works correctly
+- Bulk approve and bulk reject flows work correctly
+- Final-hardening readiness includes review-console-specific checks and counts
+
+#### Known issues
+- Review console is backend-ready only in this step
+- No frontend review console UI is added yet
+
+#### Next step after completion
+- Step 24 — Pipeline observability and diagnostics
+
+### Step 24 — Pipeline observability and diagnostics
+Status: In Progress
+
+#### Planned delivery
+- Enriched run-events filtering by:
+  - run
+  - event type
+  - stage
+  - status
+  - limit
+  - offset
+  - ordering
+- Queue health summaries with:
+  - latest event snapshot
+  - heartbeat age
+  - stale-run detection
+  - health labels
+- Run diagnostics endpoint with:
+  - latest event
+  - stage timeline
+  - readiness snapshot
+  - failure snapshot
+  - stale/health metadata
+- Observability overview endpoint with:
+  - active queue count
+  - stale active runs count
+  - recent failed runs count
+  - recent event volume
+  - review backlog count
+  - run status/stage distributions
+- Final hardening count compatibility expanded for observability use
+- Test coverage for diagnostics, filtering, stale detection, and observability summaries
+
+#### Planned files
+- `apps/api/app/core/config.py`
+- `apps/api/.env.example`
+- `apps/api/app/schemas/run_event.py`
+- `apps/api/app/schemas/orchestrator.py`
+- `apps/api/app/schemas/final_hardening.py`
+- `apps/api/app/api/v1/run_events.py`
+- `apps/api/app/api/v1/orchestrator.py`
+- `apps/api/app/api/v1/final_hardening.py`
+- `apps/api/app/services/run_events.py`
+- `apps/api/app/services/orchestrator.py`
+- `apps/api/app/services/final_hardening.py`
+- `apps/api/tests/test_run_events.py`
+- `apps/api/tests/test_orchestrator.py`
 - `apps/api/tests/test_final_hardening.py`
 - `docs/implementation-tracker.md`
