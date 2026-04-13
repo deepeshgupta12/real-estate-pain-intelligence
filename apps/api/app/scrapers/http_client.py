@@ -1,9 +1,11 @@
+import logging
 import random
 import time
 from typing import Any
 
 import httpx
 
+from app.scrapers.circuit_breaker import CircuitBreaker, classify_http_error
 from app.core.config import get_settings
 
 BROWSER_HEADERS = {
@@ -41,11 +43,19 @@ class RetryingHttpClient:
         params: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
         use_browser_headers: bool = True,
+        circuit_breaker_name: str | None = None,
     ) -> httpx.Response:
         settings = get_settings()
         last_exception: Exception | None = None
 
-        # Merge browser headers with custom headers
+        circuit_breaker = None
+        if circuit_breaker_name:
+            circuit_breaker = CircuitBreaker.get(circuit_breaker_name)
+            if not circuit_breaker.is_allowed():
+                raise RuntimeError(
+                    f"Circuit breaker [{circuit_breaker_name}] is OPEN — request blocked"
+                )
+
         merged_headers = BROWSER_HEADERS.copy() if use_browser_headers else {}
         if headers:
             merged_headers.update(headers)
@@ -61,12 +71,19 @@ class RetryingHttpClient:
                     headers=merged_headers,
                 )
                 response.raise_for_status()
+                if circuit_breaker:
+                    circuit_breaker.record_success()
                 return response
             except Exception as exc:
                 last_exception = exc
+                if circuit_breaker:
+                    if isinstance(exc, httpx.HTTPStatusError):
+                        error_type = classify_http_error(exc.response.status_code)
+                        circuit_breaker.record_failure(error_type)
+                    else:
+                        circuit_breaker.record_failure("REQUEST_ERROR")
                 if attempt >= settings.scraper_max_retries:
                     break
-                # Random jitter: random.uniform(1.5, 4.0) * (attempt + 1)
                 sleep_seconds = random.uniform(1.5, 4.0) * (attempt + 1)
                 time.sleep(sleep_seconds)
 
@@ -79,8 +96,8 @@ class RetryingHttpClient:
         params: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
         use_browser_headers: bool = True,
+        circuit_breaker_name: str | None = None,
     ) -> dict[str, Any]:
-        # For JSON requests, override Accept to application/json
         json_headers = headers or {}
         json_headers = {**json_headers}
         json_headers["Accept"] = "application/json, text/plain, */*"
@@ -91,6 +108,7 @@ class RetryingHttpClient:
             params=params,
             headers=json_headers,
             use_browser_headers=use_browser_headers,
+            circuit_breaker_name=circuit_breaker_name,
         )
         return response.json()
 
@@ -101,6 +119,7 @@ class RetryingHttpClient:
         params: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
         use_browser_headers: bool = True,
+        circuit_breaker_name: str | None = None,
     ) -> str:
         response = RetryingHttpClient._request(
             "GET",
@@ -108,5 +127,6 @@ class RetryingHttpClient:
             params=params,
             headers=headers,
             use_browser_headers=use_browser_headers,
+            circuit_breaker_name=circuit_breaker_name,
         )
         return response.text

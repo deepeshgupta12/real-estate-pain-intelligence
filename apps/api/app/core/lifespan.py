@@ -5,12 +5,14 @@ from sqlalchemy import text
 
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
+from app.core.sentry import init_sentry
 from app.db.session import engine
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     configure_logging()
+    init_sentry()
     settings = get_settings()
     logger = get_logger("app.lifecycle")
 

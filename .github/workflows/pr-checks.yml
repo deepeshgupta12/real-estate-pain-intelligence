@@ -1,0 +1,31 @@
+name: PR Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  validate:
+    name: Validate PR
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check PR title format
+        run: |
+          TITLE="${{ github.event.pull_request.title }}"
+          if echo "$TITLE" | grep -qE "^(feat|fix|docs|chore|refactor|test|perf)\(.+\):.+"; then
+            echo "✅ PR title format is valid: $TITLE"
+          else
+            echo "⚠️ Recommended PR title format: type(scope): description"
+            echo "Current title: $TITLE"
+          fi
+
+      - name: Check for migration files
+        run: |
+          CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep "alembic/versions" || true)
+          if [ -n "$CHANGED" ]; then
+            echo "⚠️ This PR includes database migrations:"
+            echo "$CHANGED"
+            echo "Ensure migrations are reviewed and tested before merging."
+          fi
