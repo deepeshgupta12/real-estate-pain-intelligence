@@ -10,17 +10,17 @@ export function NavPreviewCard({
   points,
 }: NavPreviewCardProps) {
   return (
-    <section className="workspace-surface rounded-3xl p-6">
+    <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
       <div>
-        <h3 className="text-lg font-semibold text-white">{title}</h3>
-        <p className="mt-2 text-sm leading-6 text-white/60">{description}</p>
+        <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+        <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p>
       </div>
 
-      <div className="mt-5 space-y-2">
+      <div className="mt-4 space-y-2">
         {points.map((point) => (
           <div
             key={point}
-            className="workspace-soft rounded-2xl px-4 py-3 text-sm leading-6 text-white/74"
+            className="rounded-lg bg-slate-50 px-4 py-2.5 text-sm leading-6 text-slate-700"
           >
             {point}
           </div>

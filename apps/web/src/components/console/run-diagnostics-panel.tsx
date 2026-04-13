@@ -14,6 +14,16 @@ function humanize(value: string | null | undefined): string {
   return value.replaceAll("_", " ");
 }
 
+function statusColor(value: string | null | undefined): string {
+  if (!value) return "text-slate-500";
+  const v = value.toLowerCase();
+  if (v === "completed" || v === "healthy") return "text-green-600";
+  if (v === "failed" || v === "error") return "text-red-600";
+  if (v === "running" || v === "active") return "text-blue-600";
+  if (v === "stale") return "text-amber-600";
+  return "text-slate-700";
+}
+
 export function RunDiagnosticsPanel({
   initialRunId,
   initialDiagnostics,
@@ -27,7 +37,7 @@ export function RunDiagnosticsPanel({
 
   async function handleLoad() {
     if (!runId.trim()) {
-      setError("Enter a run id to inspect diagnostics.");
+      setError("Please enter a session ID to inspect.");
       return;
     }
 
@@ -39,7 +49,7 @@ export function RunDiagnosticsPanel({
       setDiagnostics(data);
     } catch (err) {
       setDiagnostics(null);
-      setError(err instanceof Error ? err.message : "Failed to load diagnostics");
+      setError(err instanceof Error ? err.message : "Failed to load session details");
     } finally {
       setLoading(false);
     }
@@ -49,151 +59,123 @@ export function RunDiagnosticsPanel({
     <SectionShell
       id="run-diagnostics"
       eyebrow="Inspection"
-      title="Run diagnostics"
-      description="Inspect stage flow, latest event, readiness shape, and failure state for one run."
+      title="Session Details"
+      description="Inspect stage flow, latest event, readiness, and failure state for any session."
     >
-      <div className="workspace-soft mb-5 rounded-3xl p-4">
+      {/* Filter bar */}
+      <div className="mb-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-end">
           <div className="min-w-0 flex-1">
-            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-white/40">
-              Run ID
+            <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1.5">
+              Session ID
             </label>
             <input
               value={runId}
               onChange={(e) => setRunId(e.target.value)}
-              placeholder="Enter run id"
-              className="field-shell mt-2 w-full rounded-2xl px-4 py-3 text-sm"
+              placeholder="Enter session ID (e.g. 131)"
+              className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
 
           <button
             onClick={handleLoad}
             disabled={loading}
-            className="rounded-2xl border border-cyan-400/28 bg-cyan-400/12 px-5 py-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/18 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading ? "Loading..." : "Load diagnostics"}
+            {loading ? "Loading…" : "Load Details"}
           </button>
         </div>
       </div>
 
       {error ? (
-        <div className="mb-5 rounded-2xl border border-red-400/18 bg-red-400/10 px-4 py-3 text-sm text-red-100">
+        <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       ) : null}
 
       {!diagnostics ? (
-        <div className="workspace-soft rounded-2xl px-4 py-6 text-sm text-white/58">
-          Load a run id to inspect diagnostics.
+        <div className="rounded-lg bg-slate-50 px-6 py-10 text-center text-sm text-slate-500">
+          Enter a session ID above to inspect its details.
         </div>
       ) : (
         <div className="space-y-5">
+          {/* Status strip */}
           <div className="grid gap-4 lg:grid-cols-4">
-            <div className="workspace-soft rounded-2xl p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-white/40">Status</p>
-              <p className="mt-2 text-xl font-semibold text-white">
-                {humanize(diagnostics.status)}
-              </p>
-            </div>
-            <div className="workspace-soft rounded-2xl p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-white/40">Stage</p>
-              <p className="mt-2 text-xl font-semibold text-white">
-                {humanize(diagnostics.pipeline_stage)}
-              </p>
-            </div>
-            <div className="workspace-soft rounded-2xl p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-white/40">Health</p>
-              <p className="mt-2 text-xl font-semibold text-white">
-                {humanize(diagnostics.health_label)}
-              </p>
-            </div>
-            <div className="workspace-soft rounded-2xl p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-white/40">Events</p>
-              <p className="mt-2 text-xl font-semibold text-white">
-                {diagnostics.total_events}
-              </p>
-            </div>
+            {[
+              { label: "Status", value: diagnostics.status },
+              { label: "Current Step", value: diagnostics.pipeline_stage },
+              { label: "Health", value: diagnostics.health_label },
+              { label: "Total Events", value: String(diagnostics.total_events) },
+            ].map(({ label, value }) => (
+              <div key={label} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+                <p className={`mt-2 text-lg font-bold capitalize ${statusColor(value)}`}>
+                  {humanize(value)}
+                </p>
+              </div>
+            ))}
           </div>
 
+          {/* Latest event + Failure snapshot */}
           <div className="grid gap-5 xl:grid-cols-2">
-            <div className="workspace-soft rounded-3xl p-5">
-              <h3 className="text-lg font-semibold text-white">Latest event</h3>
-              <div className="mt-4 grid gap-3">
-                <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-3 text-sm text-white/76">
-                  <span className="text-white/40">Type:</span>{" "}
-                  {humanize(diagnostics.latest_event?.event_type)}
-                </div>
-                <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-3 text-sm text-white/76">
-                  <span className="text-white/40">Stage:</span>{" "}
-                  {humanize(diagnostics.latest_event?.stage)}
-                </div>
-                <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-3 text-sm text-white/76">
-                  <span className="text-white/40">Status:</span>{" "}
-                  {humanize(diagnostics.latest_event?.status)}
-                </div>
-                <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-3 text-sm text-white/76">
-                  <span className="text-white/40">Message:</span>{" "}
-                  {diagnostics.latest_event?.message ?? "N/A"}
-                </div>
-                <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-3 text-sm text-white/76">
-                  <span className="text-white/40">Created at:</span>{" "}
-                  {diagnostics.latest_event?.created_at ?? "N/A"}
-                </div>
+            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+              <h3 className="text-base font-semibold text-slate-900">Latest Event</h3>
+              <div className="mt-4 space-y-2">
+                {[
+                  { label: "Type", value: humanize(diagnostics.latest_event?.event_type) },
+                  { label: "Stage", value: humanize(diagnostics.latest_event?.stage) },
+                  { label: "Status", value: humanize(diagnostics.latest_event?.status) },
+                  { label: "Message", value: diagnostics.latest_event?.message ?? "N/A" },
+                  { label: "When", value: diagnostics.latest_event?.created_at ?? "N/A" },
+                ].map(({ label, value }) => (
+                  <div key={label} className="flex items-start gap-2 rounded-md bg-slate-50 px-3 py-2 text-sm">
+                    <span className="shrink-0 font-medium text-slate-500 w-16">{label}</span>
+                    <span className="text-slate-800 break-all">{value}</span>
+                  </div>
+                ))}
               </div>
             </div>
 
-            <div className="workspace-soft rounded-3xl p-5">
-              <h3 className="text-lg font-semibold text-white">Failure snapshot</h3>
-              <div className="mt-4 grid gap-3">
-                <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-3 text-sm text-white/76">
-                  <span className="text-white/40">Failed:</span>{" "}
-                  {diagnostics.failure_snapshot.failed ? "Yes" : "No"}
-                </div>
-                <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-3 text-sm text-white/76">
-                  <span className="text-white/40">Error:</span>{" "}
-                  {diagnostics.failure_snapshot.error_message ?? "N/A"}
-                </div>
-                <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-3 text-sm text-white/76">
-                  <span className="text-white/40">Failed stage:</span>{" "}
-                  {humanize(diagnostics.failure_snapshot.failed_stage)}
-                </div>
-                <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-3 text-sm text-white/76">
-                  <span className="text-white/40">Failed at:</span>{" "}
-                  {diagnostics.failure_snapshot.failed_at ?? "N/A"}
-                </div>
-                <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-3 text-sm text-white/76">
-                  <span className="text-white/40">Last successful stage:</span>{" "}
-                  {humanize(diagnostics.failure_snapshot.last_successful_stage)}
-                </div>
+            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+              <h3 className="text-base font-semibold text-slate-900">Failure Snapshot</h3>
+              <div className="mt-4 space-y-2">
+                {[
+                  { label: "Failed", value: diagnostics.failure_snapshot.failed ? "Yes" : "No" },
+                  { label: "Error", value: diagnostics.failure_snapshot.error_message ?? "None" },
+                  { label: "Stage", value: humanize(diagnostics.failure_snapshot.failed_stage) },
+                  { label: "At", value: diagnostics.failure_snapshot.failed_at ?? "N/A" },
+                  { label: "Last OK", value: humanize(diagnostics.failure_snapshot.last_successful_stage) },
+                ].map(({ label, value }) => (
+                  <div key={label} className="flex items-start gap-2 rounded-md bg-slate-50 px-3 py-2 text-sm">
+                    <span className="shrink-0 font-medium text-slate-500 w-16">{label}</span>
+                    <span className={`break-all ${label === "Failed" && value === "Yes" ? "text-red-600 font-semibold" : "text-slate-800"}`}>{value}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
 
-          <div className="workspace-soft rounded-3xl p-5">
-            <h3 className="text-lg font-semibold text-white">Stage timeline</h3>
-            <div className="mt-4 overflow-x-auto console-scrollbar">
-              <table className="data-table min-w-225">
+          {/* Stage timeline */}
+          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <h3 className="text-base font-semibold text-slate-900 mb-4">Stage Timeline</h3>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
                 <thead>
-                  <tr>
-                    <th>Stage</th>
-                    <th>First event</th>
-                    <th>Last event</th>
-                    <th>Latest status</th>
-                    <th>Events</th>
-                    <th>Duration</th>
+                  <tr className="border-b border-slate-200">
+                    {["Stage", "First Event", "Last Event", "Latest Status", "Events", "Duration"].map((h) => (
+                      <th key={h} className="pb-2 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{h}</th>
+                    ))}
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-100">
                   {diagnostics.stage_timeline.map((item) => (
-                    <tr key={item.stage} className="data-row-hover">
-                      <td className="font-medium text-white">
-                        {humanize(item.stage)}
-                      </td>
-                      <td>{item.first_event_at}</td>
-                      <td>{item.last_event_at}</td>
-                      <td>{humanize(item.latest_status)}</td>
-                      <td>{item.event_count}</td>
-                      <td>{item.duration_seconds}s</td>
+                    <tr key={item.stage} className="hover:bg-slate-50">
+                      <td className="py-2.5 pr-4 font-medium text-slate-900 capitalize">{humanize(item.stage)}</td>
+                      <td className="py-2.5 pr-4 text-slate-500">{item.first_event_at}</td>
+                      <td className="py-2.5 pr-4 text-slate-500">{item.last_event_at}</td>
+                      <td className={`py-2.5 pr-4 capitalize font-medium ${statusColor(item.latest_status)}`}>{humanize(item.latest_status)}</td>
+                      <td className="py-2.5 pr-4 text-slate-700">{item.event_count}</td>
+                      <td className="py-2.5 text-slate-700">{item.duration_seconds}s</td>
                     </tr>
                   ))}
                 </tbody>
@@ -201,34 +183,29 @@ export function RunDiagnosticsPanel({
             </div>
           </div>
 
+          {/* Readiness */}
           <div className="grid gap-5 xl:grid-cols-2">
-            <div className="workspace-soft rounded-3xl p-5">
-              <h3 className="text-lg font-semibold text-white">Readiness checks</h3>
-              <div className="mt-4 grid gap-2">
+            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+              <h3 className="text-base font-semibold text-slate-900 mb-4">Readiness Checks</h3>
+              <div className="space-y-2">
                 {Object.entries(diagnostics.readiness_checks).map(([key, value]) => (
-                  <div
-                    key={key}
-                    className="flex items-center justify-between rounded-2xl border border-white/8 bg-white/2 px-4 py-3 text-sm"
-                  >
-                    <span className="text-white/70">{humanize(key)}</span>
-                    <span className={value ? "text-emerald-300" : "text-amber-300"}>
-                      {String(value)}
+                  <div key={key} className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm">
+                    <span className="text-slate-600 capitalize">{humanize(key)}</span>
+                    <span className={`font-semibold ${value ? "text-green-600" : "text-amber-600"}`}>
+                      {value ? "✓ Ready" : "⚠ Not yet"}
                     </span>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="workspace-soft rounded-3xl p-5">
-              <h3 className="text-lg font-semibold text-white">Readiness counts</h3>
-              <div className="mt-4 grid gap-2">
+            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+              <h3 className="text-base font-semibold text-slate-900 mb-4">Stage Counts</h3>
+              <div className="space-y-2">
                 {Object.entries(diagnostics.readiness_counts).map(([key, value]) => (
-                  <div
-                    key={key}
-                    className="flex items-center justify-between rounded-2xl border border-white/8 bg-white/2 px-4 py-3 text-sm"
-                  >
-                    <span className="text-white/70">{humanize(key)}</span>
-                    <span className="text-white">{value}</span>
+                  <div key={key} className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm">
+                    <span className="text-slate-600 capitalize">{humanize(key)}</span>
+                    <span className="font-semibold text-slate-900">{value}</span>
                   </div>
                 ))}
               </div>
