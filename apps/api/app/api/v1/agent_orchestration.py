@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
+from app.db.session import get_db
 from app.models.raw_evidence import RawEvidence
 from app.services.agent_orchestrator import AgentOrchestratorService
 

@@ -13,7 +13,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
+from app.db.session import get_db
 from app.services.topic_modeling import TopicModelingService, REAL_ESTATE_PAIN_SEEDS
 
 logger = logging.getLogger(__name__)
