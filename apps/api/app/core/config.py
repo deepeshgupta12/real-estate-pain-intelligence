@@ -90,6 +90,28 @@ class Settings(BaseSettings):
     observability_recent_failure_window_minutes: int = 60
     observability_recent_events_window_minutes: int = 60
 
+    # Redis / ARQ
+    redis_url: str = "redis://localhost:6379/0"
+    arq_max_jobs: int = 10
+    arq_job_timeout: int = 300  # seconds
+
+    # JWT Auth
+    jwt_secret_key: str = "change-me-in-production-use-256-bit-random-key"
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 60
+    jwt_refresh_token_expire_days: int = 7
+
+    # Rate limiting
+    rate_limit_enabled: bool = True
+    rate_limit_per_minute: int = 60
+    rate_limit_burst: int = 10
+
+    # Database connection pooling
+    db_pool_size: int = 10
+    db_max_overflow: int = 20
+    db_pool_timeout: int = 30
+    db_pool_recycle: int = 1800
+
     # Multi-agent orchestrator settings
     agent_orchestrator_enabled: bool = False
     anthropic_api_key: str | None = None
