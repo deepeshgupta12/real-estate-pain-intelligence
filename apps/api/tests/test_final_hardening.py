@@ -28,6 +28,12 @@ def test_final_hardening_readiness_and_overview() -> None:
     assert client.post(f"/api/v1/retrieval/index/{run_id}").status_code == 200
     assert client.post(f"/api/v1/human-review/generate/{run_id}").status_code == 200
 
+    summary_response = client.get(f"/api/v1/human-review/summary?run_id={run_id}")
+    assert summary_response.status_code == 200
+    summary_payload = summary_response.json()
+    assert summary_payload["total_items"] >= 1
+    assert summary_payload["pending_review_count"] >= 1
+
     queue_response = client.get(f"/api/v1/human-review?run_id={run_id}")
     assert queue_response.status_code == 200
     review_item_id = queue_response.json()[0]["id"]
@@ -53,9 +59,12 @@ def test_final_hardening_readiness_and_overview() -> None:
     assert readiness_payload["run_id"] == run_id
     assert readiness_payload["checks"]["has_evidence"] is True
     assert readiness_payload["checks"]["human_review_ready"] is True
+    assert readiness_payload["checks"]["review_console_ready"] is True
     assert readiness_payload["checks"]["notion_ready"] is True
     assert readiness_payload["counts"]["evidence_count"] >= 1
     assert readiness_payload["counts"]["insight_count"] >= 1
+    assert readiness_payload["counts"]["review_count"] >= 1
+    assert readiness_payload["counts"]["approved_review_count"] == 1
     assert readiness_payload["counts"]["export_count"] == 2
 
     overview_response = client.get("/api/v1/final-hardening/overview")
@@ -64,6 +73,8 @@ def test_final_hardening_readiness_and_overview() -> None:
     assert overview_payload["runs_total"] >= 1
     assert overview_payload["evidence_total"] >= 1
     assert overview_payload["insights_total"] >= 1
+    assert overview_payload["review_queue_total"] >= 1
+    assert overview_payload["approved_review_total"] >= 1
 
 
 def test_final_hardening_guardrails_block_downstream_without_prerequisites() -> None:

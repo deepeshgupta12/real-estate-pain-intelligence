@@ -108,11 +108,23 @@ class FinalHardeningService:
             db,
             select(func.count(HumanReviewItem.id)).where(HumanReviewItem.scrape_run_id == run_id),
         )
+        pending_review_count = FinalHardeningService._count(
+            db,
+            select(func.count(HumanReviewItem.id))
+            .where(HumanReviewItem.scrape_run_id == run_id)
+            .where(HumanReviewItem.review_status == "pending_review"),
+        )
         approved_review_count = FinalHardeningService._count(
             db,
             select(func.count(HumanReviewItem.id))
             .where(HumanReviewItem.scrape_run_id == run_id)
             .where(HumanReviewItem.reviewer_decision == "approved"),
+        )
+        rejected_review_count = FinalHardeningService._count(
+            db,
+            select(func.count(HumanReviewItem.id))
+            .where(HumanReviewItem.scrape_run_id == run_id)
+            .where(HumanReviewItem.reviewer_decision == "rejected"),
         )
         notion_sync_count = FinalHardeningService._count(
             db,
@@ -134,6 +146,7 @@ class FinalHardeningService:
             "intelligence_ready": multilingual_count > 0 or normalized_count > 0,
             "retrieval_ready": embedded_retrieval_count > 0,
             "human_review_ready": insight_count > 0,
+            "review_console_ready": review_count > 0 and insight_count > 0,
             "notion_ready": approved_review_count > 0,
             "export_ready": evidence_count > 0,
             "run_not_failed": run.status != "failed",
@@ -149,7 +162,9 @@ class FinalHardeningService:
                 "retrieval_count": retrieval_count,
                 "embedded_retrieval_count": embedded_retrieval_count,
                 "review_count": review_count,
+                "pending_review_count": pending_review_count,
                 "approved_review_count": approved_review_count,
+                "rejected_review_count": rejected_review_count,
                 "notion_sync_count": notion_sync_count,
                 "export_count": export_count,
                 "run_event_count": run_event_count,
@@ -179,6 +194,24 @@ class FinalHardeningService:
             "review_queue_total": FinalHardeningService._count(
                 db,
                 select(func.count(HumanReviewItem.id)),
+            ),
+            "pending_review_total": FinalHardeningService._count(
+                db,
+                select(func.count(HumanReviewItem.id)).where(
+                    HumanReviewItem.review_status == "pending_review"
+                ),
+            ),
+            "approved_review_total": FinalHardeningService._count(
+                db,
+                select(func.count(HumanReviewItem.id)).where(
+                    HumanReviewItem.reviewer_decision == "approved"
+                ),
+            ),
+            "rejected_review_total": FinalHardeningService._count(
+                db,
+                select(func.count(HumanReviewItem.id)).where(
+                    HumanReviewItem.reviewer_decision == "rejected"
+                ),
             ),
             "notion_jobs_total": FinalHardeningService._count(
                 db,

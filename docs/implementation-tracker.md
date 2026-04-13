@@ -725,8 +725,6 @@ Status: Completed
 - Pipeline observability and run diagnostics
 - Full frontend product console
 - Multi-tenant architecture
-
-## Explicitly Out of V2 Scope
 - Advanced clustering/topic modeling beyond practical need
 - Automated agent orchestration with many LLM agents talking to each other
 
@@ -741,6 +739,8 @@ Status: Completed
 24. Pipeline observability and diagnostics
 25. Full frontend product console
 26. Multi-tenant architecture foundation
+27. Advanced clustering/topic modeling beyond practical need
+28. Automated agent orchestration with many LLM agents talking to each other
 
 ### Step 17 — Real ingestion foundation + first live connector
 Status: Completed
@@ -956,3 +956,139 @@ Status: Completed
 
 #### Next step after completion
 - Step 21 — Embedding retrieval foundation
+
+### Step 21 — Embedding retrieval foundation
+Status: Completed
+
+#### Delivered
+- Embedding service added for deterministic embedding generation
+- Retrieval indexing upgraded from token-only indexing to embedding-backed indexing
+- Embedding metadata fields added to retrieval documents:
+  - embedding_status
+  - embedding_model_name
+  - embedding_dimensions
+  - embedding_vector_json
+  - embedded_at
+- Native pgvector column added:
+  - embedding_vector
+- Two-step migration path added:
+  - Step 21A JSON-backed embedding persistence
+  - Step 21B native pgvector upgrade
+- Retrieval search upgraded to embedding similarity scoring
+- Backend config added for embedding provider/model/dimensions and retrieval defaults
+- Docker Postgres image upgraded to pgvector-enabled image
+- Native pgvector extension verified in local Postgres
+- Tests updated and passing for embedding-backed retrieval flow
+
+#### Implemented files
+- `apps/api/.env.example`
+- `apps/api/docker-compose.yml`
+- `apps/api/pyproject.toml`
+- `apps/api/alembic/env.py`
+- `apps/api/alembic/versions/0015_retrieval_embed.py`
+- `apps/api/alembic/versions/0016_retrieval_pgvector.py`
+- `apps/api/app/core/config.py`
+- `apps/api/app/models/retrieval_document.py`
+- `apps/api/app/schemas/retrieval.py`
+- `apps/api/app/api/v1/retrieval.py`
+- `apps/api/app/services/embeddings.py`
+- `apps/api/app/services/retrieval.py`
+- `apps/api/app/services/final_hardening.py`
+- `apps/api/tests/test_retrieval.py`
+
+#### Test notes
+- Fresh DB reset with Docker volume removal completed
+- Alembic migration chain runs cleanly through `0016_retrieval_pgvector`
+- pgvector extension installed and verified in Postgres
+- Retrieval table includes native `vector(64)` column
+- Pytest passes with Step 21 coverage included
+- Embedding-backed indexing and retrieval flow works correctly
+
+#### Known issues
+- Embeddings are still deterministic/local and not provider-generated yet
+- ANN indexing (ivfflat / hnsw) is not yet added
+- Retrieval is embedding-based now, but hybrid lexical + vector ranking is still pending for later refinement
+
+#### Next step after completion
+- Step 22 — Hybrid LLM-assisted intelligence
+
+### Step 22 — Hybrid LLM-assisted intelligence
+Status: Completed
+
+#### Delivered
+- Hybrid intelligence mode added with deterministic baseline + optional LLM refinement
+- OpenAI-backed LLM intelligence configuration added
+- Official OpenAI SDK dependency added
+- LLM intelligence service added with:
+  - prompt construction
+  - JSON output parsing
+  - safe normalization of returned fields
+  - OpenAI Responses API integration
+- Intelligence pipeline upgraded to:
+  - preserve deterministic baseline
+  - optionally refine with LLM
+  - gracefully fall back to deterministic output on LLM failure
+- Intelligence response expanded with:
+  - llm_generated_count
+  - deterministic_generated_count
+- Insight metadata now persists:
+  - analysis_mode
+  - llm_attempted
+  - llm_used
+  - baseline snapshot
+  - final snapshot
+  - llm provider/model metadata
+  - llm error when fallback occurs
+- Test coverage added for:
+  - deterministic-only execution
+  - LLM-assisted execution
+  - deterministic fallback after simulated LLM failure
+
+#### Implemented files
+- `apps/api/app/core/config.py`
+- `apps/api/.env.example`
+- `apps/api/pyproject.toml`
+- `apps/api/app/schemas/intelligence.py`
+- `apps/api/app/api/v1/intelligence.py`
+- `apps/api/app/services/llm_intelligence.py`
+- `apps/api/app/services/intelligence.py`
+- `apps/api/tests/test_intelligence.py`
+
+#### Test notes
+- Pytest passes with Step 22 intelligence coverage included
+- Deterministic-only intelligence path works correctly
+- LLM-assisted intelligence path works correctly under mocked provider response
+- LLM failure path falls back cleanly to deterministic output
+- Insight metadata clearly indicates whether LLM was used or fallback occurred
+
+#### Known issues
+- Real LLM execution requires valid OpenAI API credentials and enabling hybrid mode in env
+- Structured JSON enforcement is prompt-based in this step and can be hardened further later
+- Retrieval-informed multi-document reasoning is still not added yet; this step is single-evidence hybrid enrichment
+
+#### Next step after completion
+- Step 23 — Review console backend readiness
+
+### Step 23 — Review console backend readiness
+Status: In Progress
+
+#### Planned delivery
+- Review summary endpoint for frontend console headers and dashboard stats
+- Enriched queue listing with filters for:
+  - review status
+  - reviewer decision
+  - priority
+  - analysis mode
+- Review detail endpoint with joined insight and evidence context
+- Bulk approve and bulk reject endpoints
+- Review queue payload enrichment using insight and evidence metadata
+- Final hardening readiness upgraded with review-console-specific checks and counts
+
+#### Planned files
+- `apps/api/app/schemas/human_review.py`
+- `apps/api/app/api/v1/human_review.py`
+- `apps/api/app/services/human_review.py`
+- `apps/api/app/services/final_hardening.py`
+- `apps/api/tests/test_human_review.py`
+- `apps/api/tests/test_final_hardening.py`
+- `docs/implementation-tracker.md`

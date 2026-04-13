@@ -8,6 +8,7 @@ class FinalHardeningChecks(BaseModel):
     intelligence_ready: bool
     retrieval_ready: bool
     human_review_ready: bool
+    review_console_ready: bool
     notion_ready: bool
     export_ready: bool
     run_not_failed: bool
@@ -20,7 +21,9 @@ class FinalHardeningCounts(BaseModel):
     insight_count: int
     retrieval_count: int
     review_count: int
+    pending_review_count: int
     approved_review_count: int
+    rejected_review_count: int
     notion_sync_count: int
     export_count: int
     run_event_count: int
@@ -43,6 +46,9 @@ class SystemOverviewResponse(BaseModel):
     insights_total: int
     retrieval_documents_total: int
     review_queue_total: int
+    pending_review_total: int
+    approved_review_total: int
+    rejected_review_total: int
     notion_jobs_total: int
     export_jobs_total: int
     run_events_total: int

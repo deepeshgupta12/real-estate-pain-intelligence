@@ -14,7 +14,14 @@ def process_run_intelligence(
     run_id: int,
     db: Session = Depends(get_db),
 ) -> RunIntelligenceResponse:
-    run, total, generated_count, failed_count = IntelligenceService.process_run(
+    (
+        run,
+        total,
+        generated_count,
+        llm_generated_count,
+        deterministic_generated_count,
+        failed_count,
+    ) = IntelligenceService.process_run(
         db=db,
         run_id=run_id,
     )
@@ -22,6 +29,8 @@ def process_run_intelligence(
         run_id=run.id,
         total_evidence=total,
         insights_generated=generated_count,
+        llm_generated_count=llm_generated_count,
+        deterministic_generated_count=deterministic_generated_count,
         failed_count=failed_count,
         pipeline_stage=run.pipeline_stage,
         status=run.status,

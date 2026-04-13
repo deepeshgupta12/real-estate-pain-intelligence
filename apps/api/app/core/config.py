@@ -59,6 +59,14 @@ class Settings(BaseSettings):
     retrieval_vector_distance: Literal["cosine"] = "cosine"
     retrieval_search_default_top_k: int = 5
 
+    intelligence_mode: Literal["deterministic", "hybrid_llm"] = "deterministic"
+    intelligence_enable_llm: bool = False
+    intelligence_llm_provider: Literal["openai"] = "openai"
+    intelligence_openai_model: str = "gpt-5.4"
+    intelligence_llm_timeout_seconds: float = 30.0
+    intelligence_llm_max_retries: int = 2
+    openai_api_key: str | None = None
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
