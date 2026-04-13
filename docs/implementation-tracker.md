@@ -46,6 +46,18 @@ Real Estate Pain Point Intelligence Platform
 ### Step 0 — Cleanup and reset
 Status: Completed
 
+#### Delivered
+- Monorepo structure created
+- FastAPI backend skeleton created
+- Next.js frontend skeleton created
+- Root documentation files created
+- Implementation tracker created
+- Health endpoint added
+- Frontend-to-backend health connectivity added
+- Initial polished dashboard shell created
+- Python package initialization added
+- Pytest import path issue resolved via conftest
+
 ### Step 1 — Repository setup + backend/frontend foundation
 Status: Completed
 
@@ -471,13 +483,14 @@ Status: Completed
 - `docs/implementation-tracker.md`
 
 #### Test notes
-- Frontend should build successfully with current Next.js setup
+- Frontend build passes successfully with current Next.js setup
 - Console uses existing Step 23 and Step 24 backend APIs directly
 - No extra frontend dependency was introduced
 - Interactive review actions are wired against live backend routes
 
 #### Known issues
 - Frontend uses direct browser-to-backend calls and assumes backend is reachable on configured API base URL
+- CORS middleware is required on the backend for browser-driven approve / reject and bulk review actions
 - No authentication or role-based UI constraints yet
 - Pagination is basic and can be expanded later
 - Additional sections for evidence explorer, retrieval explorer, and export center can be added in later steps
