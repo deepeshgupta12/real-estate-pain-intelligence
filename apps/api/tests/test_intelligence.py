@@ -1,12 +1,18 @@
 from fastapi.testclient import TestClient
 
+from app.core.config import get_settings
 from app.main import app
 from app.services.llm_intelligence import LLMIntelligenceService
 
 client = TestClient(app)
 
 
-def test_intelligence_processing_flow_deterministic_only() -> None:
+def test_intelligence_processing_flow_deterministic_only(monkeypatch) -> None:
+    monkeypatch.setenv("INTELLIGENCE_MODE", "deterministic")
+    monkeypatch.setenv("INTELLIGENCE_ENABLE_LLM", "false")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    get_settings.cache_clear()
+
     run_response = client.post(
         "/api/v1/runs",
         json={
@@ -62,6 +68,8 @@ def test_intelligence_processing_flow_deterministic_only() -> None:
     assert insights_payload[0]["action_recommendation"] is not None
     assert insights_payload[0]["metadata_json"]["analysis_mode"] == "deterministic_only"
     assert insights_payload[0]["metadata_json"]["llm_used"] is False
+
+    get_settings.cache_clear()
 
 
 def test_intelligence_processing_flow_llm_assisted(monkeypatch) -> None:
