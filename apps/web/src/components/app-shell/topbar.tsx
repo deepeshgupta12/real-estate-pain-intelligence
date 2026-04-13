@@ -18,8 +18,8 @@ export function Topbar({ environment, version, apiStatus }: TopbarProps) {
             Product Intelligence Workspace
           </h1>
           <p className="mt-1 text-sm text-white/55">
-            Build surface for scraping, analysis, prioritization, actioning, and
-            reporting.
+            Observability, diagnostics, review workflows, and decision support
+            in one console.
           </p>
         </div>
 
@@ -27,6 +27,7 @@ export function Topbar({ environment, version, apiStatus }: TopbarProps) {
           <AppChip label={`Env: ${environment}`} />
           <AppChip label={`Version: ${version}`} />
           <AppChip label={`API: ${apiStatus}`} />
+          <AppChip label="Step 25" />
         </div>
       </div>
     </header>

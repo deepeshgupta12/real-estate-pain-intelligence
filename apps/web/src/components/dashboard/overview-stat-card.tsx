@@ -1,6 +1,6 @@
 type OverviewStatCardProps = {
   label: string;
-  value: string;
+  value: string | number;
   helper: string;
 };
 

@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Real Estate Pain Point Intelligence",
   description:
-    "Multi-agent pain point intelligence platform for Indian real-estate brands",
+    "Operational console for real-estate pain-point intelligence, observability, and human review workflows.",
 };
 
 export default function RootLayout({
