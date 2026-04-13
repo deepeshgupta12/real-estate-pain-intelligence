@@ -7,6 +7,8 @@ from app.models.retrieval_document import RetrievalDocument
 from app.models.run_event import RunEvent
 from app.models.scrape_run import ScrapeRun
 from app.models.system_state import SystemState
+from app.models.pain_point_fingerprint import PainPointFingerprint
+from app.models.organization import Organization
 
 __all__ = [
     "SystemState",
@@ -18,4 +20,6 @@ __all__ = [
     "HumanReviewItem",
     "NotionSyncJob",
     "ExportJob",
+    "PainPointFingerprint",
+    "Organization",
 ]
