@@ -10,14 +10,14 @@ export function OverviewStatCard({
   helper,
 }: OverviewStatCardProps) {
   return (
-    <div className="workspace-surface rounded-3xl p-5">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/40">
+    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
         {label}
       </p>
-      <p className="mt-3 text-2xl font-semibold tracking-tight text-white">
+      <p className="mt-3 text-2xl font-bold tracking-tight text-slate-900">
         {value}
       </p>
-      <p className="mt-2 text-sm leading-6 text-white/56">{helper}</p>
+      <p className="mt-2 text-sm leading-5 text-slate-500">{helper}</p>
     </div>
   );
 }

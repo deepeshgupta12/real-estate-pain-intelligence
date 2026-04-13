@@ -12,10 +12,10 @@ export function SectionCard({
   children,
 }: SectionCardProps) {
   return (
-    <section className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_16px_50px_rgba(0,0,0,0.25)] backdrop-blur">
+    <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="mb-5">
-        <h2 className="text-xl font-semibold text-white">{title}</h2>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-white/65">
+        <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
+        <p className="mt-1.5 max-w-3xl text-sm leading-6 text-slate-500">
           {description}
         </p>
       </div>
