@@ -29,7 +29,7 @@ export default async function Home() {
   let apiSubtitle = "Backend not reachable";
   let apiVersion = "Unknown";
   let environment = "unknown";
-  let appName = "Pain Intelligence";
+  let appName = "Market Intelligence";
   let apiPrefix = "/api/v1";
 
   let hardeningOverview: FinalHardeningOverviewResponse | null = null;
