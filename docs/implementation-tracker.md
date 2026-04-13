@@ -1068,3 +1068,27 @@ Status: Completed
 
 #### Next step after completion
 - Step 23 — Review console backend readiness
+
+### Step 23 — Review console backend readiness
+Status: In Progress
+
+#### Planned delivery
+- Review summary endpoint for frontend console headers and dashboard stats
+- Enriched queue listing with filters for:
+  - review status
+  - reviewer decision
+  - priority
+  - analysis mode
+- Review detail endpoint with joined insight and evidence context
+- Bulk approve and bulk reject endpoints
+- Review queue payload enrichment using insight and evidence metadata
+- Final hardening readiness upgraded with review-console-specific checks and counts
+
+#### Planned files
+- `apps/api/app/schemas/human_review.py`
+- `apps/api/app/api/v1/human_review.py`
+- `apps/api/app/services/human_review.py`
+- `apps/api/app/services/final_hardening.py`
+- `apps/api/tests/test_human_review.py`
+- `apps/api/tests/test_final_hardening.py`
+- `docs/implementation-tracker.md`
