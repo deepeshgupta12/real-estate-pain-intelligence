@@ -1,12 +1,19 @@
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.lifespan import lifespan
+from app.core.rate_limit import limiter
 from app.schemas.common import MessageResponse
+
+logger = logging.getLogger(__name__)
 
 
 class APIKeyMiddleware(BaseHTTPMiddleware):
@@ -36,6 +43,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 app.add_middleware(APIKeyMiddleware)
 
 app.add_middleware(
@@ -45,6 +55,12 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+# Warn if using default JWT secret in production
+if settings.jwt_secret_key == "change-me-in-production-use-256-bit-random-key":
+    logger.warning(
+        "JWT_SECRET_KEY is using default value — set a secure random key in production!"
+    )
 
 
 @app.get("/", response_model=MessageResponse, tags=["root"])
