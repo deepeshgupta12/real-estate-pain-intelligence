@@ -8,7 +8,10 @@ import { NavPreviewCard } from "@/components/dashboard/nav-preview-card";
 import { OverviewStatCard } from "@/components/dashboard/overview-stat-card";
 import { PipelineStageCard } from "@/components/dashboard/pipeline-stage-card";
 import { CurrentRunPanel } from "@/components/console/current-run-panel";
-import { PipelineActionsPanel, PipelineActionKey } from "@/components/console/pipeline-actions-panel";
+import {
+  PipelineActionsPanel,
+  PipelineActionKey,
+} from "@/components/console/pipeline-actions-panel";
 import { PipelineProgressPanel } from "@/components/console/pipeline-progress-panel";
 import { QueueHealthPanel } from "@/components/console/queue-health-panel";
 import { ReviewConsolePanel } from "@/components/console/review-console-panel";
@@ -167,8 +170,12 @@ export function WorkspaceShell({
   const [appName, setAppName] = useState(initialAppName);
   const [apiPrefix, setApiPrefix] = useState(initialApiPrefix);
 
-  const [hardeningOverview, setHardeningOverview] = useState(initialHardeningOverview);
-  const [observabilityOverview, setObservabilityOverview] = useState(initialObservabilityOverview);
+  const [hardeningOverview, setHardeningOverview] = useState(
+    initialHardeningOverview,
+  );
+  const [observabilityOverview, setObservabilityOverview] = useState(
+    initialObservabilityOverview,
+  );
   const [queueHealth, setQueueHealth] = useState(initialQueueHealth);
   const [recentEvents, setRecentEvents] = useState(initialRecentEvents);
   const [reviewSummary, setReviewSummary] = useState(initialReviewSummary);
@@ -180,7 +187,8 @@ export function WorkspaceShell({
   const [availableSources, setAvailableSources] = useState(initialSources);
 
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
-  const [actionLoadingKey, setActionLoadingKey] = useState<PipelineActionKey | null>(null);
+  const [actionLoadingKey, setActionLoadingKey] =
+    useState<PipelineActionKey | null>(null);
   const [workspaceError, setWorkspaceError] = useState("");
   const [workspaceMessage, setWorkspaceMessage] = useState("");
 
@@ -195,7 +203,10 @@ export function WorkspaceShell({
       return "No run selected yet.";
     }
 
-    return `Run #${currentRun.id} is currently in "${currentRun.pipeline_stage.replaceAll("_", " ")}" with status "${currentRun.status}".`;
+    return `Run #${currentRun.id} is currently in "${currentRun.pipeline_stage.replaceAll(
+      "_",
+      " ",
+    )}" with status "${currentRun.status}".`;
   }, [currentRun]);
 
   const refreshWorkspace = useCallback(
@@ -214,8 +225,6 @@ export function WorkspaceShell({
           observability,
           queue,
           events,
-          summary,
-          reviews,
           runsData,
           sourcesData,
         ] = await Promise.all([
@@ -225,8 +234,6 @@ export function WorkspaceShell({
           fetchObservabilityOverview(),
           fetchQueueHealth(),
           fetchRunEvents({ limit: 20, newestFirst: true }),
-          fetchReviewSummary(),
-          fetchReviewQueue({ includeDetails: true, limit: 20, offset: 0 }),
           fetchScrapeRuns(),
           fetchSupportedSources(),
         ]);
@@ -242,32 +249,48 @@ export function WorkspaceShell({
         setObservabilityOverview(observability);
         setQueueHealth(queue);
         setRecentEvents(events);
-        setReviewSummary(summary);
-        setReviewQueue(reviews);
         setRuns(runsData);
         setAvailableSources(sourcesData);
 
         const nextRunId =
-          preferredRunId ??
-          currentRun?.id ??
-          runsData[0]?.id ??
-          queue[0]?.run_id ??
-          null;
+          preferredRunId ?? currentRun?.id ?? runsData[0]?.id ?? queue[0]?.run_id ?? null;
 
         if (nextRunId) {
-          const [runData, diagnosticsData, readinessData] = await Promise.all([
+          const [
+            runData,
+            diagnosticsData,
+            readinessData,
+            scopedSummary,
+            scopedQueue,
+          ] = await Promise.all([
             fetchScrapeRun(nextRunId),
             fetchRunDiagnostics(nextRunId),
             fetchRunReadiness(nextRunId),
+            fetchReviewSummary(nextRunId),
+            fetchReviewQueue({
+              runId: nextRunId,
+              includeDetails: true,
+              limit: 20,
+              offset: 0,
+            }),
           ]);
 
           setCurrentRun(runData);
           setCurrentDiagnostics(diagnosticsData);
           setCurrentReadiness(readinessData);
+          setReviewSummary(scopedSummary);
+          setReviewQueue(scopedQueue);
         } else {
+          const [globalSummary, globalQueue] = await Promise.all([
+            fetchReviewSummary(),
+            fetchReviewQueue({ includeDetails: true, limit: 20, offset: 0 }),
+          ]);
+
           setCurrentRun(null);
           setCurrentDiagnostics(null);
           setCurrentReadiness(null);
+          setReviewSummary(globalSummary);
+          setReviewQueue(globalQueue);
         }
       } catch (error) {
         setWorkspaceError(
@@ -289,7 +312,10 @@ export function WorkspaceShell({
 
     try {
       const createdRun = await createScrapeRun(payload);
-      await refreshWorkspace(createdRun.id, `Run #${createdRun.id} created successfully.`);
+      await refreshWorkspace(
+        createdRun.id,
+        `Run #${createdRun.id} created successfully.`,
+      );
     } catch (error) {
       setWorkspaceError(
         error instanceof Error ? error.message : "Failed to create the run.",
@@ -452,8 +478,8 @@ export function WorkspaceShell({
             />
             <OverviewStatCard
               label="Current Build Step"
-              value="Step 26A"
-              helper="Full pipeline action workspace with human-friendly wording."
+              value="Step 26B"
+              helper="Run-scoped review workspace and clearer operational visibility."
             />
           </section>
 
@@ -482,13 +508,13 @@ export function WorkspaceShell({
 
           <section className="mt-8 grid gap-6 xl:grid-cols-2">
             <NavPreviewCard
-              title="What changes in Step 26A"
-              description="The console is no longer only for observation. It now becomes an operating workspace for the pipeline."
+              title="What changes in Step 26B"
+              description="The workspace is now more reliable for run-specific review operations and signal inspection."
               points={[
-                "Create a run or continue an older one",
-                "Trigger stage actions directly from the frontend",
-                "Track run progress with simpler, human-friendly labels",
-                "Keep diagnostics, events, queue health, and review tools in the same workspace",
+                "Review console defaults to the active run instead of mixed global data",
+                "Run-level review summary stays aligned with the selected run",
+                "Analysis mode and live versus stub evidence are easier to inspect",
+                "Current run snapshot now surfaces signal quality from review outputs",
               ]}
             />
 
@@ -562,7 +588,9 @@ export function WorkspaceShell({
               <button
                 type="button"
                 onClick={handleQuickQueueAndStart}
-                disabled={!currentRunId || actionLoadingKey !== null || workspaceLoading}
+                disabled={
+                  !currentRunId || actionLoadingKey !== null || workspaceLoading
+                }
                 className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Quick queue + start
@@ -570,7 +598,9 @@ export function WorkspaceShell({
 
               <button
                 type="button"
-                onClick={() => refreshWorkspace(currentRunId, "Workspace refreshed.")}
+                onClick={() =>
+                  refreshWorkspace(currentRunId, "Workspace refreshed.")
+                }
                 disabled={workspaceLoading || actionLoadingKey !== null}
                 className="rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-5 py-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
               >
@@ -592,6 +622,7 @@ export function WorkspaceShell({
             <CurrentRunPanel
               currentRun={currentRun}
               readiness={currentReadiness}
+              reviewQueue={reviewQueue}
             />
 
             <PipelineProgressPanel
@@ -615,6 +646,8 @@ export function WorkspaceShell({
             <RunEventsPanel initialEvents={recentEvents} />
 
             <ReviewConsolePanel
+              initialRunId={currentRunId}
+              activeRunId={currentRunId}
               initialSummary={reviewSummary}
               initialQueue={reviewQueue}
             />

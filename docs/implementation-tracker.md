@@ -548,3 +548,67 @@ Status: In Progress
 
 #### Next step after confirmation
 - Step 26B — optional deeper output workspaces such as evidence explorer, retrieval explorer, export center, and richer stage-level result views
+
+### Step 26A — Full pipeline action workspace
+Status: Completed
+
+#### Delivered
+- Frontend run setup section added with:
+  - create new run
+  - load existing run
+  - friendlier labels and placeholders
+- Current run summary section added with:
+  - basic run details
+  - readiness snapshot
+  - easier wording
+- Pipeline progress tracker added with:
+  - human-friendly stage names
+  - completed / next focus / pending states
+- Pipeline action section added for:
+  - start data collection
+  - clean text
+  - prepare language support
+  - generate insights
+  - prepare search-ready knowledge
+  - create review list
+  - prepare Notion sync
+  - run Notion sync
+  - create files
+  - check final readiness
+- Workspace-wide refresh flow added so monitoring sections can be refreshed after actions
+- Info-tip component added to explain terms in simple language
+- Existing queue health, diagnostics, events, and review console remain available below the new action workspace
+- Existing backend APIs are reused for Step 26A, so no new backend endpoints are required
+
+### Step 26B — Run-scoped review workspace enhancements
+Status: Completed
+
+#### Delivered
+- Initial page load updated to fetch review summary and queue for the preferred active run instead of mixed global review data
+- Workspace refresh flow updated to keep review summary and queue aligned with the selected run
+- Review console upgraded with:
+  - active-run default scoping
+  - explicit run scope switching
+  - clearer analysis mode visibility
+  - clearer live vs stub fetch-mode visibility
+  - source-level visibility in the queue
+  - richer joined review detail state
+- Current run summary upgraded with review signal snapshot showing:
+  - live-backed items
+  - stub-backed items
+  - unknown fetch-mode items
+  - LLM-used insights
+  - non-LLM insights
+- Frontend build intent for this step is to reduce confusion caused by cross-run moderation context and make live-versus-fallback behavior easier to inspect
+
+#### Implemented files
+- `apps/web/src/app/page.tsx`
+- `apps/web/src/components/console/workspace-shell.tsx`
+- `apps/web/src/components/console/current-run-panel.tsx`
+- `apps/web/src/components/console/review-console-panel.tsx`
+
+#### Test notes
+- Review console should now default to the selected run instead of showing mixed items from older runs
+- Refreshing the workspace after any pipeline action should keep review summary and review queue run-scoped
+- Review detail should now expose analysis mode, LLM flags, and evidence fetch mode more clearly
+- This step is frontend-focused and does not change backend scraper behavior by itself
