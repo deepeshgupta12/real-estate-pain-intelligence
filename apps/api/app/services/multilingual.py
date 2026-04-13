@@ -7,6 +7,12 @@ from app.models.raw_evidence import RawEvidence
 from app.models.scrape_run import ScrapeRun
 from app.services.orchestrator import OrchestratorService
 
+HINGLISH_MARKERS = {
+    "hai", "ka", "ki", "ke", "mein", "nahi", "aur", "kya",
+    "ye", "wo", "ek", "se", "ko", "par", "ab", "toh", "bhi",
+    "hain", "tha", "thi", "bahut", "koi", "mere", "tera"
+}
+
 
 class MultilingualService:
     @staticmethod
@@ -20,10 +26,44 @@ class MultilingualService:
         return "unknown"
 
     @staticmethod
+    def _detect_language_from_text(text: str) -> str | None:
+        """Try to detect language from text content using langdetect if available."""
+        try:
+            from langdetect import detect, DetectorFactory
+            DetectorFactory.seed = 42  # Deterministic
+            if text and len(text.strip()) > 20:
+                detected = detect(text.strip())
+                return detected
+        except Exception:
+            pass
+        return None
+
+    @staticmethod
+    def _is_hinglish(text: str) -> bool:
+        """Detect if text is Hinglish (Roman script with Hindi words)."""
+        if not text:
+            return False
+        words = set(text.lower().split())
+        overlap = words & HINGLISH_MARKERS
+        return len(overlap) >= 2
+
+    @staticmethod
     def _resolve_language(evidence: RawEvidence, script_label: str) -> str:
         candidate = evidence.normalized_language or evidence.language
         if candidate and candidate.strip():
             return candidate.strip().lower()
+
+        base_text = evidence.normalized_text or evidence.cleaned_text or evidence.raw_text
+
+        # Try langdetect if available
+        if script_label == "latin":
+            detected = MultilingualService._detect_language_from_text(base_text)
+            if detected:
+                return detected
+
+        # Check for Hinglish
+        if script_label == "latin" and MultilingualService._is_hinglish(base_text):
+            return "hi-Latn"
 
         if script_label == "devanagari":
             return "hi"

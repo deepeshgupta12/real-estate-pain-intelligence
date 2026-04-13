@@ -5,87 +5,47 @@ type QueueHealthPanelProps = {
   queueItems: QueueHealthItem[];
 };
 
-function healthClass(healthLabel: string): string {
-  if (healthLabel === "healthy") return "badge badge-success";
-  if (healthLabel === "stale") return "badge badge-warning";
-  if (healthLabel === "failed") return "badge badge-danger";
-  return "badge badge-neutral";
-}
-
-function humanize(value: string | null | undefined): string {
-  if (!value) return "N/A";
+function humanize(value: string): string {
   return value.replaceAll("_", " ");
 }
 
 export function QueueHealthPanel({ queueItems }: QueueHealthPanelProps) {
+  const activeCount = queueItems.filter((item) => item.status === "active").length;
+
   return (
     <SectionShell
       id="queue-health"
-      eyebrow="Monitoring"
-      title="Queue health"
-      description="See active runs, heartbeat freshness, current stage, and the latest event snapshot without the older heavy table treatment."
+      eyebrow="System"
+      title="Active Sessions"
+      description="Monitor running research sessions"
     >
-      <div className="workspace-soft rounded-3xl overflow-hidden">
-        <div className="overflow-x-auto console-scrollbar">
-          <table className="data-table min-w-225">
-            <thead>
-              <tr>
-                <th>Run</th>
-                <th>Source</th>
-                <th>Brand</th>
-                <th>Stage</th>
-                <th>Health</th>
-                <th>Heartbeat</th>
-                <th>Latest event</th>
-              </tr>
-            </thead>
-            <tbody>
-              {queueItems.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-6 text-sm text-white/58">
-                    No active runs are currently present in the queue.
-                  </td>
-                </tr>
-              ) : (
-                queueItems.map((item) => (
-                  <tr key={item.run_id} className="data-row-hover">
-                    <td className="font-semibold text-white">#{item.run_id}</td>
-                    <td>{humanize(item.source_name)}</td>
-                    <td>{item.target_brand}</td>
-                    <td>
-                      <div className="font-medium text-white">
-                        {humanize(item.pipeline_stage)}
-                      </div>
-                      <div className="mt-1 text-xs text-white/45">
-                        {humanize(item.status)}
-                      </div>
-                    </td>
-                    <td>
-                      <span className={healthClass(item.health_label)}>
-                        {humanize(item.health_label)}
-                      </span>
-                    </td>
-                    <td>
-                      <div>{item.heartbeat_age_seconds ?? "N/A"}s ago</div>
-                      <div className="mt-1 text-xs text-white/45">
-                        {item.last_heartbeat_at ?? "N/A"}
-                      </div>
-                    </td>
-                    <td>
-                      <div className="font-medium text-white">
-                        {humanize(item.latest_event_type)}
-                      </div>
-                      <div className="mt-1 max-w-md text-xs leading-5 text-white/50">
-                        {item.latest_event_message ?? "No event message available"}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+      {queueItems.length === 0 ? (
+        <div className="rounded-lg bg-slate-50 px-6 py-8 text-center text-slate-600">
+          No active sessions.
         </div>
-      </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <p className="text-sm text-blue-900">
+              <span className="font-semibold">{activeCount}</span> session(s) running
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            {queueItems.map((item) => (
+              <div key={item.run_id} className="card p-4 flex items-center justify-between">
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-slate-900">Run #{item.run_id}</p>
+                  <p className="text-sm text-slate-600 truncate">{item.brand_identifier}</p>
+                </div>
+                <div className="shrink-0 ml-4">
+                  <span className="status-pill info">{humanize(item.status)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </SectionShell>
   );
 }

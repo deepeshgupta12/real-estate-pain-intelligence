@@ -1,4 +1,3 @@
-import { InfoTip } from "@/components/ui/info-tip";
 import {
   ReviewQueueItem,
   RunReadinessResponse,
@@ -20,284 +19,97 @@ function humanize(value: string | null | undefined): string {
   return value.replaceAll("_", " ");
 }
 
-function getFetchMode(item: ReviewQueueItem): string {
-  const evidenceMode = item.evidence_snapshot?.metadata_json?.fetch_mode;
-  if (typeof evidenceMode === "string" && evidenceMode.trim()) {
-    return evidenceMode;
-  }
-
-  const queueMode = item.metadata_json?.fetch_mode;
-  if (typeof queueMode === "string" && queueMode.trim()) {
-    return queueMode;
-  }
-
-  return "unknown";
-}
-
-function metricTone(value: string): string {
-  if (value === "ready") return "text-emerald-300";
-  if (value === "not_ready") return "text-amber-300";
-  return "text-white";
-}
-
 export function CurrentRunPanel({
   currentRun,
   readiness,
   reviewQueue,
 }: CurrentRunPanelProps) {
-  const liveCount = reviewQueue.filter((item) => getFetchMode(item) === "live").length;
-  const stubCount = reviewQueue.filter((item) => getFetchMode(item) === "stub").length;
-  const unknownCount = reviewQueue.filter(
-    (item) => !["live", "stub"].includes(getFetchMode(item)),
-  ).length;
-
-  const llmUsedCount = reviewQueue.filter(
-    (item) => item.insight_snapshot?.llm_used === true,
-  ).length;
-
-  const deterministicCount = reviewQueue.filter(
-    (item) => item.insight_snapshot?.llm_used !== true,
-  ).length;
-
   return (
     <SectionShell
       id="current-run"
-      eyebrow="Active run"
-      title="Current run summary"
-      description="A cleaner snapshot of the active run, with identity, operational counts, readiness, and review-signal quality in one place."
+      eyebrow="Status"
+      title="Current Session"
+      description="Overview of the active research session"
     >
       {!currentRun ? (
-        <div className="workspace-soft rounded-2xl px-4 py-6 text-sm text-white/58">
-          No run is selected yet. Create a new run or load an existing run to begin.
+        <div className="rounded-lg bg-slate-50 px-6 py-8 text-center text-slate-600">
+          No session selected yet. Create or load one to begin.
         </div>
       ) : (
-        <div className="space-y-5">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <div className="workspace-soft rounded-2xl p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-white/40">
-                Run ID
-              </p>
-              <p className="mt-2 text-2xl font-semibold text-white">
-                #{currentRun.id}
+        <div className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="card p-4">
+              <p className="text-xs font-semibold text-slate-600 uppercase">Platform</p>
+              <p className="mt-2 text-lg font-semibold text-slate-900">{humanize(currentRun.source_name)}</p>
+            </div>
+
+            <div className="card p-4">
+              <p className="text-xs font-semibold text-slate-600 uppercase">Brand</p>
+              <p className="mt-2 text-lg font-semibold text-slate-900">{currentRun.target_brand}</p>
+            </div>
+
+            <div className="card p-4">
+              <p className="text-xs font-semibold text-slate-600 uppercase">Status</p>
+              <p className="mt-2">
+                <span className="status-pill success">{humanize(currentRun.status)}</span>
               </p>
             </div>
 
-            <div className="workspace-soft rounded-2xl p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-white/40">
-                Brand
-              </p>
-              <p className="mt-2 text-2xl font-semibold text-white">
-                {currentRun.target_brand}
-              </p>
-            </div>
-
-            <div className="workspace-soft rounded-2xl p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-white/40">
-                Status
-              </p>
-              <p className="mt-2 text-2xl font-semibold text-white">
-                {humanize(currentRun.status)}
-              </p>
-            </div>
-
-            <div className="workspace-soft rounded-2xl p-4">
-              <div className="flex items-center gap-2">
-                <p className="text-xs uppercase tracking-[0.16em] text-white/40">
-                  Current stage
-                </p>
-                <InfoTip
-                  title="Current stage"
-                  description="This is the latest pipeline stage recorded for the run."
-                />
-              </div>
-              <p className="mt-2 text-2xl font-semibold text-white">
-                {humanize(currentRun.pipeline_stage)}
-              </p>
+            <div className="card p-4">
+              <p className="text-xs font-semibold text-slate-600 uppercase">Current Step</p>
+              <p className="mt-2 text-sm font-semibold text-slate-900">{humanize(currentRun.pipeline_stage)}</p>
             </div>
           </div>
 
-          <div className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
-            <div className="workspace-soft rounded-3xl p-5">
-              <h3 className="text-lg font-semibold text-white">Run details</h3>
-
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.16em] text-white/38">
-                    Source
-                  </p>
-                  <p className="mt-1 text-sm font-medium text-white/82">
-                    {humanize(currentRun.source_name)}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.16em] text-white/38">
-                    Start type
-                  </p>
-                  <p className="mt-1 text-sm font-medium text-white/82">
-                    {humanize(currentRun.trigger_mode)}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.16em] text-white/38">
-                    Items discovered
-                  </p>
-                  <p className="mt-1 text-sm font-medium text-white/82">
-                    {currentRun.items_discovered}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.16em] text-white/38">
-                    Items processed
-                  </p>
-                  <p className="mt-1 text-sm font-medium text-white/82">
-                    {currentRun.items_processed}
-                  </p>
-                </div>
+          <div className="card p-6">
+            <h3 className="font-semibold text-slate-900 mb-4">Session Details</h3>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <p className="text-sm text-slate-600">Posts Collected</p>
+                <p className="text-2xl font-semibold text-slate-900 mt-1">{currentRun.items_discovered}</p>
               </div>
-
-              <div className="mt-4 space-y-3">
-                <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.16em] text-white/38">
-                    Latest note
-                  </p>
-                  <p className="mt-1 text-sm leading-6 text-white/74">
-                    {currentRun.orchestrator_notes ?? "No note available"}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.16em] text-white/38">
-                    Last error
-                  </p>
-                  <p className="mt-1 text-sm leading-6 text-white/74">
-                    {currentRun.error_message ?? "No error recorded"}
-                  </p>
-                </div>
+              <div>
+                <p className="text-sm text-slate-600">Posts Processed</p>
+                <p className="text-2xl font-semibold text-slate-900 mt-1">{currentRun.items_processed}</p>
               </div>
             </div>
-
-            <div className="workspace-soft rounded-3xl p-5">
-              <div className="flex items-center gap-2">
-                <h3 className="text-lg font-semibold text-white">
-                  Readiness snapshot
-                </h3>
-                <InfoTip
-                  title="Readiness snapshot"
-                  description="This shows whether the run already has the outputs needed for downstream stages."
-                />
+            {currentRun.orchestrator_notes && (
+              <div className="mt-4 pt-4 border-t border-slate-200">
+                <p className="text-sm text-slate-600">Notes</p>
+                <p className="text-sm text-slate-700 mt-1">{currentRun.orchestrator_notes}</p>
               </div>
-
-              {!readiness ? (
-                <div className="mt-4 text-sm text-white/58">
-                  Readiness details are not available yet.
-                </div>
-              ) : (
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-white/8 bg-white/2 p-4">
-                    <p className="text-xs uppercase tracking-[0.16em] text-white/38">
-                      Final state
-                    </p>
-                    <p
-                      className={`mt-2 text-xl font-semibold ${metricTone(
-                        readiness.ready_for_finalization ? "ready" : "not_ready",
-                      )}`}
-                    >
-                      {readiness.ready_for_finalization ? "Ready" : "Not ready"}
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl border border-white/8 bg-white/2 p-4">
-                    <p className="text-xs uppercase tracking-[0.16em] text-white/38">
-                      Evidence
-                    </p>
-                    <p className="mt-2 text-xl font-semibold text-white">
-                      {readiness.counts.evidence_count}
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl border border-white/8 bg-white/2 p-4">
-                    <p className="text-xs uppercase tracking-[0.16em] text-white/38">
-                      Insights
-                    </p>
-                    <p className="mt-2 text-xl font-semibold text-white">
-                      {readiness.counts.insight_count}
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl border border-white/8 bg-white/2 p-4">
-                    <p className="text-xs uppercase tracking-[0.16em] text-white/38">
-                      Review items
-                    </p>
-                    <p className="mt-2 text-xl font-semibold text-white">
-                      {readiness.counts.review_count}
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
+            )}
+            {currentRun.error_message && (
+              <div className="mt-4 pt-4 border-t border-red-200 bg-red-50 p-3 rounded text-sm text-red-700">
+                Error: {currentRun.error_message}
+              </div>
+            )}
           </div>
 
-          <div className="workspace-soft rounded-3xl p-5">
-            <div className="flex items-center gap-2">
-              <h3 className="text-lg font-semibold text-white">
-                Review signal quality
-              </h3>
-              <InfoTip
-                title="Review signal quality"
-                description="These metrics are derived from the currently loaded review items for the active run."
-              />
-            </div>
-
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-              <div className="rounded-2xl border border-white/8 bg-white/2 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-white/38">
-                  Live-backed
-                </p>
-                <p className="mt-2 text-xl font-semibold text-emerald-300">
-                  {liveCount}
-                </p>
+          {readiness && (
+            <div className="card p-6">
+              <h3 className="font-semibold text-slate-900 mb-4">Readiness</h3>
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="text-center">
+                  <p className="text-sm text-slate-600">Posts</p>
+                  <p className="text-2xl font-semibold text-slate-900 mt-1">{readiness.counts.evidence_count}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm text-slate-600">Pain Points</p>
+                  <p className="text-2xl font-semibold text-slate-900 mt-1">{readiness.counts.insight_count}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm text-slate-600">Review Items</p>
+                  <p className="text-2xl font-semibold text-slate-900 mt-1">{readiness.counts.review_count}</p>
+                </div>
               </div>
-
-              <div className="rounded-2xl border border-white/8 bg-white/2 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-white/38">
-                  Stub-backed
-                </p>
-                <p className="mt-2 text-xl font-semibold text-amber-300">
-                  {stubCount}
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-white/8 bg-white/2 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-white/38">
-                  Unknown mode
-                </p>
-                <p className="mt-2 text-xl font-semibold text-white">
-                  {unknownCount}
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-white/8 bg-white/2 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-white/38">
-                  LLM used
-                </p>
-                <p className="mt-2 text-xl font-semibold text-cyan-200">
-                  {llmUsedCount}
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-white/8 bg-white/2 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-white/38">
-                  Deterministic
-                </p>
-                <p className="mt-2 text-xl font-semibold text-white">
-                  {deterministicCount}
-                </p>
+              <div className="mt-4 pt-4 border-t border-slate-200">
+                <span className={`status-pill ${readiness.ready_for_finalization ? "success" : "warning"}`}>
+                  {readiness.ready_for_finalization ? "Ready for export" : "In progress"}
+                </span>
               </div>
             </div>
-          </div>
+          )}
         </div>
       )}
     </SectionShell>

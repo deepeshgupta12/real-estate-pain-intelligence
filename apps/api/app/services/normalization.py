@@ -12,10 +12,13 @@ from app.services.orchestrator import OrchestratorService
 class NormalizationService:
     @staticmethod
     def _normalize_text(text: str) -> str:
-        text = text.strip()
-        text = re.sub(r"\s+", " ", text)
-        text = text.replace("\n", " ")
-        return text
+        # Preserve emoji: only collapse repeated punctuation, not all punctuation
+        # Collapse 3+ repeated punct chars to 1
+        text = re.sub(r'([!?.]){2,}', r'\1', text)
+        # Collapse whitespace
+        text = re.sub(r'\s+', ' ', text)
+        # Strip leading/trailing whitespace
+        return text.strip()
 
     @staticmethod
     def _detect_language(raw_language: str | None) -> str:

@@ -1,5 +1,7 @@
-import { InfoTip } from "@/components/ui/info-tip";
-import { RunReadinessResponse, ScrapeRunResponse } from "@/lib/api";
+import {
+  RunReadinessResponse,
+  ScrapeRunResponse,
+} from "@/lib/api";
 import { SectionShell } from "@/components/console/section-shell";
 
 type PipelineProgressPanelProps = {
@@ -7,195 +9,110 @@ type PipelineProgressPanelProps = {
   readiness: RunReadinessResponse | null;
 };
 
-type StageStatus = "completed" | "current" | "upcoming";
-
-function toneForStatus(status: StageStatus): string {
-  if (status === "completed") {
-    return "border-emerald-400/18 bg-emerald-400/10";
-  }
-
-  if (status === "current") {
-    return "border-cyan-400/18 bg-cyan-400/10";
-  }
-
-  return "border-white/8 bg-white/[0.025]";
+function humanize(value: string | null | undefined): string {
+  if (!value) return "Unknown";
+  return value.replaceAll("_", " ");
 }
 
-function labelForStatus(status: StageStatus): string {
-  if (status === "completed") return "Done";
-  if (status === "current") return "Current";
-  return "Pending";
-}
-
-function badgeTone(status: StageStatus): string {
-  if (status === "completed") return "badge badge-success";
-  if (status === "current") return "badge badge-info";
-  return "badge badge-neutral";
-}
+const steps = [
+  { stage: "created", label: "Created", icon: "📋" },
+  { stage: "dispatched", label: "Dispatched", icon: "🚀" },
+  { stage: "scraping", label: "Collecting", icon: "📥" },
+  { stage: "scraping_completed", label: "Collection Done", icon: "✓" },
+  { stage: "normalization_completed", label: "Cleaned", icon: "✓" },
+  { stage: "multilingual_completed", label: "Detected Languages", icon: "✓" },
+  { stage: "intelligence_completed", label: "Analyzed", icon: "✓" },
+  { stage: "retrieval_indexed", label: "Indexed", icon: "✓" },
+  { stage: "review_queued", label: "Review Ready", icon: "✓" },
+  { stage: "exports_generated", label: "Exported", icon: "✓" },
+];
 
 export function PipelineProgressPanel({
   currentRun,
   readiness,
 }: PipelineProgressPanelProps) {
-  const counts = readiness?.counts;
-  const checks = readiness?.checks;
+  if (!currentRun) {
+    return (
+      <SectionShell
+        id="pipeline-progress"
+        eyebrow="Timeline"
+        title="Pipeline Progress"
+        description="Track the research session through each step"
+      >
+        <div className="rounded-lg bg-slate-50 px-6 py-8 text-center text-slate-600">
+          No session selected yet.
+        </div>
+      </SectionShell>
+    );
+  }
 
-  const completionFlags = [
-    Boolean(currentRun),
-    (counts?.evidence_count ?? 0) > 0,
-    (counts?.normalized_count ?? 0) > 0,
-    (counts?.multilingual_count ?? 0) > 0,
-    (counts?.insight_count ?? 0) > 0,
-    (counts?.retrieval_count ?? 0) > 0,
-    (counts?.review_count ?? 0) > 0,
-    (counts?.notion_sync_count ?? 0) > 0,
-    (counts?.export_count ?? 0) > 0,
-    Boolean(readiness?.ready_for_finalization),
-  ];
-
-  const firstPendingIndex = completionFlags.findIndex((flag) => !flag);
-
-  const stages = [
-    {
-      title: "Run setup",
-      description: "A run exists and is ready to be operated.",
-      done: completionFlags[0],
-    },
-    {
-      title: "Collect feedback",
-      description: "Bring raw public feedback into the workspace.",
-      done: completionFlags[1],
-    },
-    {
-      title: "Clean text",
-      description: "Normalize the collected content into stable inputs.",
-      done: completionFlags[2],
-    },
-    {
-      title: "Prepare language",
-      description: "Resolve multilingual and script-related signals.",
-      done: completionFlags[3],
-    },
-    {
-      title: "Generate insights",
-      description: "Turn evidence into structured pain-point output.",
-      done: completionFlags[4],
-    },
-    {
-      title: "Build search library",
-      description: "Create retrieval-ready documents for later querying.",
-      done: completionFlags[5],
-    },
-    {
-      title: "Create review list",
-      description: "Prepare moderation-ready review queue items.",
-      done: completionFlags[6],
-    },
-    {
-      title: "Prepare Notion sync",
-      description: "Generate sync jobs for approved items.",
-      done: completionFlags[7],
-    },
-    {
-      title: "Create exports",
-      description: "Generate CSV, JSON, and PDF output.",
-      done: completionFlags[8],
-    },
-    {
-      title: "Final readiness",
-      description: "Confirm run completeness across the pipeline.",
-      done: completionFlags[9],
-    },
-  ];
+  const currentStageIndex = steps.findIndex((s) => s.stage === currentRun.pipeline_stage);
 
   return (
     <SectionShell
       id="pipeline-progress"
-      eyebrow="Stage tracker"
-      title="Pipeline progress"
-      description="A more readable view of where the active run stands, based on actual generated outputs rather than only the latest stage label."
+      eyebrow="Timeline"
+      title="Pipeline Progress"
+      description="Track the research session through each step"
     >
-      {!currentRun ? (
-        <div className="workspace-soft rounded-2xl px-4 py-6 text-sm text-white/58">
-          Pick a run first to see pipeline progress.
-        </div>
-      ) : (
-        <>
-          <div className="workspace-soft mb-5 rounded-3xl p-5">
-            <div className="flex items-center gap-2">
-              <h3 className="text-lg font-semibold text-white">
-                How to read this
-              </h3>
-              <InfoTip
-                title="How this works"
-                description="The tracker marks steps as completed when their key outputs exist for the active run."
-              />
-            </div>
+      <div className="card p-6">
+        <div className="space-y-4">
+          {steps.map((step, index) => {
+            const isCompleted = index < currentStageIndex;
+            const isCurrent = index === currentStageIndex;
+            const isPending = index > currentStageIndex;
 
-            <p className="mt-3 text-sm leading-6 text-white/60">
-              The current step is the first unfinished stage. This keeps the
-              tracker aligned with actual backend state instead of relying only
-              on one stage string.
-            </p>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {stages.map((stage, index) => {
-              let status: StageStatus = "upcoming";
-
-              if (stage.done) {
-                status = "completed";
-              } else if (firstPendingIndex === index) {
-                status = "current";
-              }
-
-              return (
+            return (
+              <div key={step.stage} className="flex items-center gap-4">
                 <div
-                  key={stage.title}
-                  className={`rounded-3xl border p-5 ${toneForStatus(status)}`}
+                  className={`flex h-8 w-8 items-center justify-center rounded-full shrink-0 text-sm font-semibold ${
+                    isCompleted
+                      ? "bg-green-100 text-green-700"
+                      : isCurrent
+                      ? "bg-blue-100 text-blue-700"
+                      : "bg-slate-100 text-slate-400"
+                  }`}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/38">
-                        Step {String(index + 1).padStart(2, "0")}
-                      </p>
-                      <h3 className="mt-2 text-lg font-semibold text-white">
-                        {stage.title}
-                      </h3>
-                    </div>
-
-                    <span className={badgeTone(status)}>{labelForStatus(status)}</span>
-                  </div>
-
-                  <p className="mt-3 text-sm leading-6 text-white/62">
-                    {stage.description}
+                  {isCompleted ? "✓" : isCurrent ? step.icon : `${index + 1}`}
+                </div>
+                <div className="flex-1">
+                  <p
+                    className={`font-medium ${
+                      isCurrent
+                        ? "text-slate-900 font-semibold"
+                        : isCompleted
+                        ? "text-green-700"
+                        : "text-slate-500"
+                    }`}
+                  >
+                    {step.label}
                   </p>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
+        </div>
 
-          {checks ? (
-            <div className="workspace-soft mt-5 rounded-3xl p-5">
-              <h3 className="text-lg font-semibold text-white">Readiness checks</h3>
-
-              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {Object.entries(checks).map(([key, value]) => (
-                  <div
-                    key={key}
-                    className="flex items-center justify-between rounded-2xl border border-white/8 bg-white/2 px-4 py-3 text-sm"
-                  >
-                    <span className="text-white/70">{key.replaceAll("_", " ")}</span>
-                    <span className={value ? "text-emerald-300" : "text-amber-300"}>
-                      {value ? "Yes" : "No"}
-                    </span>
-                  </div>
-                ))}
+        {readiness && (
+          <div className="mt-6 pt-6 border-t border-slate-200">
+            <p className="text-sm font-medium text-slate-900">Counts:</p>
+            <div className="mt-3 grid grid-cols-3 gap-4">
+              <div className="text-center">
+                <p className="text-2xl font-semibold text-slate-900">{readiness.counts.evidence_count}</p>
+                <p className="text-xs text-slate-600 mt-1">Posts</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-semibold text-slate-900">{readiness.counts.insight_count}</p>
+                <p className="text-xs text-slate-600 mt-1">Pain Points</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-semibold text-slate-900">{readiness.counts.review_count}</p>
+                <p className="text-xs text-slate-600 mt-1">Review Items</p>
               </div>
             </div>
-          ) : null}
-        </>
-      )}
+          </div>
+        )}
+      </div>
     </SectionShell>
   );
 }
