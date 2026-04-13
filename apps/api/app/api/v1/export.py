@@ -1,7 +1,11 @@
-from fastapi import APIRouter, Depends, Query
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.models.export_job import ExportJob
 from app.schemas.export import (
     ExportDecisionRequest,
     ExportGenerateRequest,
@@ -74,4 +78,33 @@ def mark_export_job_failed(
         db=db,
         export_job_id=export_job_id,
         export_notes=payload.export_notes,
+    )
+
+
+@router.get("/download/{export_job_id}")
+def download_export_file(
+    export_job_id: int,
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    job = db.get(ExportJob, export_job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Export job not found")
+    if not job.file_path or not job.file_name:
+        raise HTTPException(status_code=404, detail="Export file has not been generated yet")
+
+    file_path = Path(job.file_path)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Export file not found on disk")
+
+    media_type_map = {
+        "csv": "text/csv",
+        "json": "application/json",
+        "pdf": "application/pdf",
+    }
+    media_type = media_type_map.get(job.export_format, "application/octet-stream")
+
+    return FileResponse(
+        path=str(file_path),
+        filename=job.file_name,
+        media_type=media_type,
     )

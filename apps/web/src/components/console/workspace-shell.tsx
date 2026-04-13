@@ -18,6 +18,7 @@ import { ReviewConsolePanel } from "@/components/console/review-console-panel";
 import { RunDiagnosticsPanel } from "@/components/console/run-diagnostics-panel";
 import { RunEventsPanel } from "@/components/console/run-events-panel";
 import { RunSetupPanel } from "@/components/console/run-setup-panel";
+import { ExportsPanel } from "@/components/console/exports-panel";
 import {
   createScrapeRun,
   dispatchRun,
@@ -191,6 +192,7 @@ export function WorkspaceShell({
     useState<PipelineActionKey | null>(null);
   const [workspaceError, setWorkspaceError] = useState("");
   const [workspaceMessage, setWorkspaceMessage] = useState("");
+  const [exportRefreshKey, setExportRefreshKey] = useState(0);
 
   // Scroll to top on mount so page refresh doesn't restore a mid-page hash position
   useEffect(() => {
@@ -402,7 +404,8 @@ export function WorkspaceShell({
         await generateExportJobs(currentRunId, {
           export_formats: ["csv", "json", "pdf"],
         });
-        await refreshWorkspace(currentRunId, "Downloadable files created.");
+        setExportRefreshKey((k) => k + 1);
+        await refreshWorkspace(currentRunId, "Downloadable files created. See the Exports panel below.");
         return;
       }
 
@@ -650,6 +653,8 @@ export function WorkspaceShell({
               onAction={handleAction}
               lastActionError={workspaceError || undefined}
             />
+
+            <ExportsPanel runId={currentRunId} triggerRefresh={exportRefreshKey} />
 
             <QueueHealthPanel queueItems={queueHealth} />
 

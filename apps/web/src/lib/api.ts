@@ -247,6 +247,21 @@ export type ExportGenerateResponse = {
   orchestrator_notes: string | null;
 };
 
+export type ExportJobResponse = {
+  id: number;
+  scrape_run_id: number;
+  export_format: string;
+  export_status: string;
+  file_name: string | null;
+  file_path: string | null;
+  file_size_bytes: number | null;
+  row_count: number | null;
+  generated_at: string | null;
+  export_notes: string | null;
+  completed_at: string | null;
+  created_at: string;
+};
+
 export type RunReadinessResponse = {
   run_id: number;
   status: string;
@@ -581,6 +596,14 @@ export async function generateExportJobs(
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export async function fetchExportJobs(runId: number): Promise<ExportJobResponse[]> {
+  return fetchJson<ExportJobResponse[]>(`/api/v1/exports?run_id=${runId}`);
+}
+
+export function getExportDownloadUrl(exportJobId: number): string {
+  return `/api/v1/exports/download/${exportJobId}`;
 }
 
 export async function fetchRunEvents(params?: {
