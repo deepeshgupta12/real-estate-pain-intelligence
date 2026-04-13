@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -7,6 +9,19 @@ from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.lifespan import lifespan
 from app.schemas.common import MessageResponse
+
+logger = logging.getLogger(__name__)
+
+
+def setup_prometheus(app: FastAPI) -> None:
+    """Set up Prometheus metrics collection."""
+    try:
+        from prometheus_fastapi_instrumentator import Instrumentator
+        Instrumentator().instrument(app).expose(app, endpoint="/metrics")
+    except ImportError:
+        logger.warning("prometheus-fastapi-instrumentator not installed, metrics disabled")
+    except Exception as exc:
+        logger.warning(f"Failed to set up Prometheus instrumentation: {exc}")
 
 
 class APIKeyMiddleware(BaseHTTPMiddleware):
@@ -51,5 +66,7 @@ app.add_middleware(
 def root() -> MessageResponse:
     return MessageResponse(message="Real Estate Pain Point Intelligence API")
 
+
+setup_prometheus(app)
 
 app.include_router(api_router, prefix=settings.api_v1_prefix)
