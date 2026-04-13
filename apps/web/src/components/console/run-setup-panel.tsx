@@ -14,6 +14,10 @@ type RunSetupPanelProps = {
   onSelectRun: (runId: number) => Promise<void>;
 };
 
+function humanize(value: string): string {
+  return value.replaceAll("_", " ");
+}
+
 export function RunSetupPanel({
   availableSources,
   runs,
@@ -50,120 +54,120 @@ export function RunSetupPanel({
   return (
     <SectionShell
       id="run-workspace"
-      eyebrow="Start here"
-      title="Run setup"
-      description="Create a new run or load an older one. The labels below are written in simple product language so the workflow is easier to understand and operate."
+      eyebrow="Run operations"
+      title="Create or load a run"
+      description="Start a new processing run or switch to an existing run. This section is intentionally compact so the active workflow remains visible without too much scrolling."
     >
       <div className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
-        <div className="rounded-3xl border border-white/10 bg-black/10 p-5">
+        <div className="workspace-soft rounded-3xl p-5">
           <div className="flex items-center gap-2">
-            <h3 className="text-lg font-semibold text-white">Create a new run</h3>
+            <h3 className="text-lg font-semibold text-white">Create new run</h3>
             <InfoTip
               title="What is a run?"
-              description="A run is one full processing journey for one source and one target brand. It keeps all collected feedback, progress, review output, and final files together."
+              description="A run is one complete pipeline journey for one source and one target brand."
             />
           </div>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             <div>
-              <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
+              <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-white/40">
                 Feedback source
                 <InfoTip
                   title="Feedback source"
-                  description="Choose where the public feedback will come from, such as Reddit, YouTube, app reviews, or review websites."
+                  description="Choose the public source that will feed evidence into the run."
                 />
               </label>
               <select
                 value={sourceName}
                 onChange={(e) => setSourceName(e.target.value)}
-                className="mt-2 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none"
+                className="field-shell mt-2 w-full rounded-2xl px-4 py-3 text-sm"
               >
                 {availableSources.map((source) => (
                   <option key={source} value={source}>
-                    {source}
+                    {humanize(source)}
                   </option>
                 ))}
               </select>
             </div>
 
             <div>
-              <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
-                Run start type
+              <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-white/40">
+                Start type
                 <InfoTip
                   title="Run start type"
-                  description="This is just a simple label for how the run was started. For now, manual is the normal option."
+                  description="This is the initiation mode stored against the run."
                 />
               </label>
               <select
                 value={startType}
                 onChange={(e) => setStartType(e.target.value)}
-                className="mt-2 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none"
+                className="field-shell mt-2 w-full rounded-2xl px-4 py-3 text-sm"
               >
-                <option value="manual">manual</option>
-                <option value="scheduled">scheduled</option>
-                <option value="api">api</option>
+                <option value="manual">Manual</option>
+                <option value="scheduled">Scheduled</option>
+                <option value="api">API</option>
               </select>
             </div>
           </div>
 
           <div className="mt-4">
-            <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
-              Brand or product name
+            <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-white/40">
+              Brand or product
               <InfoTip
-                title="Brand or product name"
-                description="This is the brand you want to analyze. The backend stores this as the target brand for the run."
+                title="Brand or product"
+                description="This is the product or company that the feedback will be analyzed for."
               />
             </label>
             <input
               value={brandName}
               onChange={(e) => setBrandName(e.target.value)}
               placeholder="Example: Square Yards"
-              className="mt-2 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
+              className="field-shell mt-2 w-full rounded-2xl px-4 py-3 text-sm"
             />
           </div>
 
           <div className="mt-4">
-            <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
-              Optional notes
+            <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-white/40">
+              Optional note
               <InfoTip
-                title="Optional notes"
-                description="Use this for quick context like the purpose of the run, test notes, or what you want to check after processing."
+                title="Optional note"
+                description="Use this for test context, objective, or reminder text."
               />
             </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              rows={3}
-              placeholder="Example: Test run for review quality on stale listings and agent response problems"
-              className="mt-2 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
+              rows={4}
+              placeholder="Example: Check stale-listings signals and delayed agent follow-up quality."
+              className="field-shell mt-2 w-full rounded-2xl px-4 py-3 text-sm"
             />
           </div>
 
-          <div className="mt-4">
+          <div className="mt-5 flex flex-wrap gap-3">
             <button
               type="button"
               onClick={handleCreateRun}
               disabled={loading || !brandName.trim()}
-              className="rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-5 py-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-2xl border border-cyan-400/28 bg-cyan-400/12 px-5 py-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/18 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? "Creating..." : "Create run"}
             </button>
           </div>
         </div>
 
-        <div className="rounded-3xl border border-white/10 bg-black/10 p-5">
+        <div className="workspace-soft rounded-3xl p-5">
           <div className="flex items-center gap-2">
-            <h3 className="text-lg font-semibold text-white">Load an existing run</h3>
+            <h3 className="text-lg font-semibold text-white">Existing runs</h3>
             <InfoTip
-              title="Load an existing run"
-              description="Pick an older run to continue processing, inspect progress, or review results without creating a new one."
+              title="Existing runs"
+              description="Switch to an older run to continue operating it or inspect its output."
             />
           </div>
 
           <div className="mt-5 space-y-3">
             {runs.length === 0 ? (
-              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-6 text-sm text-white/60">
-                No runs available yet. Create your first run from the left panel.
+              <div className="workspace-soft rounded-2xl px-4 py-6 text-sm text-white/58">
+                No runs available yet. Create the first run from the panel on the left.
               </div>
             ) : (
               runs.slice(0, 8).map((run) => {
@@ -177,27 +181,25 @@ export function RunSetupPanel({
                     disabled={loading}
                     className={`w-full rounded-2xl border px-4 py-4 text-left transition ${
                       isActive
-                        ? "border-cyan-400/30 bg-cyan-400/10"
-                        : "border-white/10 bg-white/5 hover:bg-white/7"
+                        ? "border-cyan-400/24 bg-cyan-400/10"
+                        : "border-white/8 bg-white/2.5 hover:border-white/14 hover:bg-white/4"
                     }`}
                   >
                     <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-sm font-semibold text-white">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-white">
                           Run #{run.id} • {run.target_brand}
                         </p>
-                        <p className="mt-1 text-xs text-white/55">
-                          Source: {run.source_name} • Status: {run.status}
+                        <p className="mt-1 text-xs text-white/52">
+                          {humanize(run.source_name)} • {humanize(run.status)}
                         </p>
-                        <p className="mt-2 text-xs text-white/45">
-                          Current stage: {run.pipeline_stage}
+                        <p className="mt-2 text-xs text-white/42">
+                          Stage: {humanize(run.pipeline_stage)}
                         </p>
                       </div>
 
                       {isActive ? (
-                        <span className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-2 py-1 text-[10px] uppercase tracking-wide text-cyan-100">
-                          Active
-                        </span>
+                        <span className="badge badge-info shrink-0">Active</span>
                       ) : null}
                     </div>
                   </button>

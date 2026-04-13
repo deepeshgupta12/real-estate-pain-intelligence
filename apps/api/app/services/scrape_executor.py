@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.raw_evidence import RawEvidence
 from app.models.scrape_run import ScrapeRun
 from app.scrapers.registry import ScraperRegistry
@@ -12,7 +13,11 @@ from app.services.orchestrator import OrchestratorService
 
 class ScrapeExecutionService:
     @staticmethod
-    def execute_run(db: Session, run_id: int) -> tuple[ScrapeRun, int, int]:
+    def execute_run(
+        db: Session, run_id: int
+    ) -> tuple[ScrapeRun, int, int, int, int, bool, bool]:
+        settings = get_settings()
+
         run = OrchestratorService.dispatch_run(db, run_id)
         run = OrchestratorService.start_run(db, run.id)
 
@@ -30,6 +35,18 @@ class ScrapeExecutionService:
             raise
 
         discovered_count = len(scraped_items)
+
+        live_items_count = 0
+        stub_items_count = 0
+
+        for item in scraped_items:
+            fetch_mode = str((item.metadata_json or {}).get("fetch_mode") or "").strip().lower()
+            if fetch_mode == "live":
+                live_items_count += 1
+            elif fetch_mode == "stub":
+                stub_items_count += 1
+
+        fallback_to_stub_used = stub_items_count > 0
 
         existing_dedupe_keys = {
             key
@@ -92,6 +109,11 @@ class ScrapeExecutionService:
 
         db.commit()
 
+        mode_summary = (
+            f"live={live_items_count}, stub={stub_items_count}, "
+            f"live_fetch_enabled={settings.scraper_enable_live_fetch}"
+        )
+
         run = OrchestratorService.update_progress(
             db=db,
             run_id=run.id,
@@ -100,9 +122,17 @@ class ScrapeExecutionService:
             items_processed=persisted_count,
             orchestrator_notes=(
                 "Source scraper execution completed and evidence persisted "
-                f"(persisted={persisted_count}, deduplicated={deduplicated_count})"
+                f"(persisted={persisted_count}, deduplicated={deduplicated_count}, {mode_summary})"
             ),
         )
 
         run = OrchestratorService.complete_run(db, run.id)
-        return run, persisted_count, deduplicated_count
+        return (
+            run,
+            persisted_count,
+            deduplicated_count,
+            live_items_count,
+            stub_items_count,
+            settings.scraper_enable_live_fetch,
+            fallback_to_stub_used,
+        )

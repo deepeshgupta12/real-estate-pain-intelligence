@@ -10,12 +10,12 @@ export function PipelineStageCard({
   description,
 }: PipelineStageCardProps) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+    <div className="workspace-surface rounded-3xl p-5">
       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200/75">
         {step}
       </p>
-      <h3 className="mt-3 text-lg font-semibold text-white">{title}</h3>
-      <p className="mt-2 text-sm leading-6 text-white/60">{description}</p>
+      <h3 className="mt-2 text-lg font-semibold text-white">{title}</h3>
+      <p className="mt-2 text-sm leading-6 text-white/58">{description}</p>
     </div>
   );
 }

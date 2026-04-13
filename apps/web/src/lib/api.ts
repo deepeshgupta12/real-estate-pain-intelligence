@@ -364,6 +364,28 @@ export type ExportGeneratePayload = {
   export_formats: string[];
 };
 
+export type ScrapeExecutionFetchModeSummary = {
+  live_fetch_enabled: boolean;
+  fail_open_to_stub: boolean;
+  live_items_count: number;
+  stub_items_count: number;
+  unknown_items_count: number;
+};
+
+export type ScrapeExecutionResponse = {
+  run_id: number;
+  source_name: string;
+  target_brand: string;
+  status: string;
+  pipeline_stage: string;
+  items_discovered: number;
+  items_processed: number;
+  persisted_evidence_count: number;
+  deduplicated_count: number;
+  orchestrator_notes: string | null;
+  fetch_mode_summary: ScrapeExecutionFetchModeSummary;
+};
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
@@ -489,19 +511,8 @@ export async function fetchRunReadiness(runId: number): Promise<RunReadinessResp
 
 export async function executeScrapeRun(
   runId: number,
-): Promise<{
-  run_id: number;
-  source_name: string;
-  target_brand: string;
-  status: string;
-  pipeline_stage: string;
-  items_discovered: number;
-  items_processed: number;
-  persisted_evidence_count: number;
-  deduplicated_count: number;
-  orchestrator_notes: string | null;
-}> {
-  return fetchJson(`/api/v1/scrape-execution/${runId}`, {
+): Promise<ScrapeExecutionResponse> {
+  return fetchJson<ScrapeExecutionResponse>(`/api/v1/scrape-execution/${runId}`, {
     method: "POST",
   });
 }

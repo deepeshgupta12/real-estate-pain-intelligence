@@ -612,3 +612,73 @@ Status: Completed
 - Refreshing the workspace after any pipeline action should keep review summary and review queue run-scoped
 - Review detail should now expose analysis mode, LLM flags, and evidence fetch mode more clearly
 - This step is frontend-focused and does not change backend scraper behavior by itself
+
+### Step 26B.1 + Step 26B.2 — Workspace UX reset + review moderation redesign
+Status: Completed
+
+#### Delivered
+- Workspace visual hierarchy redesigned to reduce clutter and improve operator usability
+- Sidebar simplified into a cleaner navigation surface with less competing content
+- Topbar rewritten to behave like an operational header instead of a marketing banner
+- Overview area redesigned into a compact workspace summary with clearer system context
+- Stat cards and preview cards restyled with lighter visual weight and better scanning
+- Section shell redesigned for more consistent spacing and stronger section separation
+- Run setup panel redesigned for cleaner create/load flow
+- Current run panel redesigned into:
+  - cleaner identity strip
+  - compact run details
+  - readiness summary
+  - signal-quality summary
+- Pipeline progress redesigned into a clearer stage tracker
+- Pipeline actions redesigned into grouped operational sections:
+  - collection and preparation
+  - analysis and indexing
+  - sync and output
+- Queue health redesigned with cleaner table styling and better health visibility
+- Run diagnostics redesigned with:
+  - lighter filter header
+  - clearer latest-event and failure panels
+  - cleaner timeline table
+  - cleaner readiness views
+- Run events explorer redesigned with cleaner filters and more readable event table
+- Review console fully redesigned with:
+  - summary metric strip
+  - clearer scope switching
+  - cleaner filter bar
+  - improved reviewer notes area
+  - cleaner queue table
+  - stronger selected-row behavior
+  - easier-to-read review detail panel
+  - clearer moderation actions
+  - improved badges for decision, priority, and fetch mode
+- Existing backend APIs remained sufficient; no backend endpoint changes were required for this step
+
+#### Implemented files
+- `apps/web/src/app/globals.css`
+- `apps/web/src/components/app-shell/sidebar.tsx`
+- `apps/web/src/components/app-shell/topbar.tsx`
+- `apps/web/src/components/dashboard/hero-banner.tsx`
+- `apps/web/src/components/dashboard/nav-preview-card.tsx`
+- `apps/web/src/components/dashboard/overview-stat-card.tsx`
+- `apps/web/src/components/dashboard/pipeline-stage-card.tsx`
+- `apps/web/src/components/console/section-shell.tsx`
+- `apps/web/src/components/console/workspace-shell.tsx`
+- `apps/web/src/components/console/run-setup-panel.tsx`
+- `apps/web/src/components/console/current-run-panel.tsx`
+- `apps/web/src/components/console/pipeline-progress-panel.tsx`
+- `apps/web/src/components/console/pipeline-actions-panel.tsx`
+- `apps/web/src/components/console/queue-health-panel.tsx`
+- `apps/web/src/components/console/run-diagnostics-panel.tsx`
+- `apps/web/src/components/console/run-events-panel.tsx`
+- `apps/web/src/components/console/review-console-panel.tsx`
+- `apps/web/src/components/ui/info-tip.tsx`
+
+#### Test notes
+- This step is frontend-only
+- Existing run, review, observability, and readiness APIs are reused
+- Review console should stay scoped to the active run by default
+- Queue and detail moderation flows should continue to work with the existing backend routes
+- Frontend lint and build should be run after replacing the files
+
+#### Next step after confirmation
+- Step 26C — evidence explorer, retrieval explorer, export center, and richer result-surface views per pipeline stage
