@@ -5,87 +5,86 @@ type QueueHealthPanelProps = {
   queueItems: QueueHealthItem[];
 };
 
-function healthTone(healthLabel: string): string {
-  if (healthLabel === "healthy") {
-    return "text-emerald-300";
-  }
-  if (healthLabel === "stale") {
-    return "text-amber-300";
-  }
-  if (healthLabel === "failed") {
-    return "text-red-300";
-  }
-  return "text-white";
+function healthClass(healthLabel: string): string {
+  if (healthLabel === "healthy") return "badge badge-success";
+  if (healthLabel === "stale") return "badge badge-warning";
+  if (healthLabel === "failed") return "badge badge-danger";
+  return "badge badge-neutral";
+}
+
+function humanize(value: string | null | undefined): string {
+  if (!value) return "N/A";
+  return value.replaceAll("_", " ");
 }
 
 export function QueueHealthPanel({ queueItems }: QueueHealthPanelProps) {
   return (
     <SectionShell
       id="queue-health"
-      eyebrow="Operational monitoring"
+      eyebrow="Monitoring"
       title="Queue health"
-      description="Live active-run queue with heartbeat freshness, latest event snapshot, and health labeling."
+      description="See active runs, heartbeat freshness, current stage, and the latest event snapshot without the older heavy table treatment."
     >
-      <div className="overflow-x-auto console-scrollbar">
-        <table className="min-w-full border-separate border-spacing-y-2">
-          <thead>
-            <tr className="text-left text-xs uppercase tracking-[0.16em] text-white/45">
-              <th className="px-4 py-2">Run</th>
-              <th className="px-4 py-2">Source</th>
-              <th className="px-4 py-2">Brand</th>
-              <th className="px-4 py-2">Stage</th>
-              <th className="px-4 py-2">Health</th>
-              <th className="px-4 py-2">Heartbeat</th>
-              <th className="px-4 py-2">Latest event</th>
-            </tr>
-          </thead>
-          <tbody>
-            {queueItems.length === 0 ? (
+      <div className="workspace-soft rounded-3xl overflow-hidden">
+        <div className="overflow-x-auto console-scrollbar">
+          <table className="data-table min-w-225">
+            <thead>
               <tr>
-                <td
-                  colSpan={7}
-                  className="rounded-2xl border border-white/10 bg-black/10 px-4 py-6 text-sm text-white/60"
-                >
-                  No active runs are currently present in the queue.
-                </td>
+                <th>Run</th>
+                <th>Source</th>
+                <th>Brand</th>
+                <th>Stage</th>
+                <th>Health</th>
+                <th>Heartbeat</th>
+                <th>Latest event</th>
               </tr>
-            ) : (
-              queueItems.map((item) => (
-                <tr
-                  key={item.run_id}
-                  className="rounded-2xl border border-white/10 bg-black/10 text-sm text-white/75"
-                >
-                  <td className="rounded-l-2xl px-4 py-4 font-semibold text-white">
-                    {item.run_id}
-                  </td>
-                  <td className="px-4 py-4">{item.source_name}</td>
-                  <td className="px-4 py-4">{item.target_brand}</td>
-                  <td className="px-4 py-4">
-                    <div className="font-medium text-white">{item.pipeline_stage}</div>
-                    <div className="mt-1 text-xs text-white/50">{item.status}</div>
-                  </td>
-                  <td className={`px-4 py-4 font-semibold ${healthTone(item.health_label)}`}>
-                    {item.health_label}
-                  </td>
-                  <td className="px-4 py-4">
-                    <div>{item.heartbeat_age_seconds}s ago</div>
-                    <div className="mt-1 text-xs text-white/50">
-                      {item.last_heartbeat_at ?? "N/A"}
-                    </div>
-                  </td>
-                  <td className="rounded-r-2xl px-4 py-4">
-                    <div className="font-medium text-white">
-                      {item.latest_event_type ?? "N/A"}
-                    </div>
-                    <div className="mt-1 max-w-md text-xs leading-5 text-white/55">
-                      {item.latest_event_message ?? "No event message available"}
-                    </div>
+            </thead>
+            <tbody>
+              {queueItems.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-6 text-sm text-white/58">
+                    No active runs are currently present in the queue.
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                queueItems.map((item) => (
+                  <tr key={item.run_id} className="data-row-hover">
+                    <td className="font-semibold text-white">#{item.run_id}</td>
+                    <td>{humanize(item.source_name)}</td>
+                    <td>{item.target_brand}</td>
+                    <td>
+                      <div className="font-medium text-white">
+                        {humanize(item.pipeline_stage)}
+                      </div>
+                      <div className="mt-1 text-xs text-white/45">
+                        {humanize(item.status)}
+                      </div>
+                    </td>
+                    <td>
+                      <span className={healthClass(item.health_label)}>
+                        {humanize(item.health_label)}
+                      </span>
+                    </td>
+                    <td>
+                      <div>{item.heartbeat_age_seconds ?? "N/A"}s ago</div>
+                      <div className="mt-1 text-xs text-white/45">
+                        {item.last_heartbeat_at ?? "N/A"}
+                      </div>
+                    </td>
+                    <td>
+                      <div className="font-medium text-white">
+                        {humanize(item.latest_event_type)}
+                      </div>
+                      <div className="mt-1 max-w-md text-xs leading-5 text-white/50">
+                        {item.latest_event_message ?? "No event message available"}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </SectionShell>
   );

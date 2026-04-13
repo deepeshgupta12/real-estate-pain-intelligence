@@ -81,7 +81,7 @@ const navigationItems: NavigationItem[] = [
   {
     id: "overview",
     label: "Overview",
-    description: "Platform health, key counts, and a quick snapshot of the workspace.",
+    description: "Workspace summary and current operating context.",
     badge: "Live",
     active: true,
     href: "#overview",
@@ -89,56 +89,56 @@ const navigationItems: NavigationItem[] = [
   {
     id: "run-workspace",
     label: "Run setup",
-    description: "Create a new run or load an older one before operating the pipeline.",
+    description: "Create a run or switch to an existing run.",
     badge: "Action",
     href: "#run-workspace",
   },
   {
     id: "current-run",
     label: "Current run",
-    description: "See the selected run, its status, counts, and current readiness.",
+    description: "Active run identity, readiness, and signal quality.",
     badge: "Live",
     href: "#current-run",
   },
   {
     id: "pipeline-progress",
     label: "Pipeline progress",
-    description: "Follow the run stage by stage with simple human-friendly labels.",
+    description: "Readable stage-level progress for the active run.",
     badge: "Guide",
     href: "#pipeline-progress",
   },
   {
     id: "pipeline-actions",
     label: "Pipeline actions",
-    description: "Run each stage directly from the frontend instead of only observing it.",
+    description: "Execute pipeline steps from the workspace.",
     badge: "Action",
     href: "#pipeline-actions",
   },
   {
     id: "queue-health",
     label: "Queue health",
-    description: "Monitor active runs, latest events, and stale heartbeat warnings.",
+    description: "Queue freshness, health labels, and recent signals.",
     badge: "Live",
     href: "#queue-health",
   },
   {
     id: "run-diagnostics",
     label: "Run diagnostics",
-    description: "Inspect a run in detail, including readiness and failure context.",
+    description: "Deep inspection for one run at a time.",
     badge: "Live",
     href: "#run-diagnostics",
   },
   {
     id: "run-events",
     label: "Run events",
-    description: "Explore the event timeline with filters for stage, type, and status.",
+    description: "Explore filtered operational events.",
     badge: "Live",
     href: "#run-events",
   },
   {
     id: "review-console",
     label: "Review console",
-    description: "Validate generated insights using single and bulk moderation actions.",
+    description: "Moderate, inspect, and bulk-handle review items.",
     badge: "Live",
     href: "#review-console",
   },
@@ -195,18 +195,17 @@ export function WorkspaceShell({
   const activeQueueCount = observabilityOverview?.active_queue_count ?? 0;
   const staleRunsCount = observabilityOverview?.stale_active_runs_count ?? 0;
   const reviewBacklogCount = observabilityOverview?.review_backlog_count ?? 0;
-
   const currentRunId = currentRun?.id ?? null;
 
   const statusSummary = useMemo(() => {
     if (!currentRun) {
-      return "No run selected yet.";
+      return "No run is selected. Create a new run or load an existing run to begin operating the workspace.";
     }
 
-    return `Run #${currentRun.id} is currently in "${currentRun.pipeline_stage.replaceAll(
+    return `Run #${currentRun.id} is active for ${currentRun.target_brand} and is currently in "${currentRun.pipeline_stage.replaceAll(
       "_",
       " ",
-    )}" with status "${currentRun.status}".`;
+    )}" with status "${currentRun.status.replaceAll("_", " ")}".`;
   }, [currentRun]);
 
   const refreshWorkspace = useCallback(
@@ -464,62 +463,62 @@ export function WorkspaceShell({
             <OverviewStatCard
               label="Application"
               value={appName}
-              helper="Frontend workspace now supports both operating the run and monitoring it."
+              helper="Frontend workspace supports both operation and monitoring."
             />
             <OverviewStatCard
               label="Environment"
               value={environment}
-              helper="Pulled from backend settings and shown across the workspace."
+              helper="Pulled directly from backend meta settings."
             />
             <OverviewStatCard
               label="API Prefix"
               value={apiPrefix}
-              helper="The route base used for run actions, review flows, and monitoring."
+              helper="Base route used across run actions and monitoring calls."
             />
             <OverviewStatCard
-              label="Current Build Step"
+              label="Current build"
               value="Step 26B"
-              helper="Run-scoped review workspace and clearer operational visibility."
+              helper="Workspace UX reset and review moderation redesign."
             />
           </section>
 
           <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <OverviewStatCard
-              label="Total Runs"
+              label="Total runs"
               value={hardeningOverview?.runs_total ?? 0}
-              helper="All runs created so far."
+              helper="All created runs visible to the workspace."
             />
             <OverviewStatCard
-              label="Completed Runs"
+              label="Completed runs"
               value={hardeningOverview?.runs_completed ?? 0}
               helper="Runs that finished successfully."
             />
             <OverviewStatCard
-              label="Failed Runs"
+              label="Failed runs"
               value={hardeningOverview?.runs_failed ?? 0}
-              helper="Runs that need attention."
+              helper="Runs that still need attention."
             />
             <OverviewStatCard
-              label="Run Events"
+              label="Run events"
               value={hardeningOverview?.run_events_total ?? 0}
-              helper="Operational event volume across the platform."
+              helper="Total operational event volume tracked in the system."
             />
           </section>
 
           <section className="mt-8 grid gap-6 xl:grid-cols-2">
             <NavPreviewCard
-              title="What changes in Step 26B"
-              description="The workspace is now more reliable for run-specific review operations and signal inspection."
+              title="What this redesign improves"
+              description="This step focuses on layout clarity and operator ease, not on adding more UI noise."
               points={[
-                "Review console defaults to the active run instead of mixed global data",
-                "Run-level review summary stays aligned with the selected run",
-                "Analysis mode and live versus stub evidence are easier to inspect",
-                "Current run snapshot now surfaces signal quality from review outputs",
+                "Cleaner run-first operating flow",
+                "Monitoring sections feel lighter and easier to scan",
+                "Review moderation is now more structured and less table-heavy",
+                "Current workspace state is easier to understand at a glance",
               ]}
             />
 
             <NavPreviewCard
-              title="Quick context"
+              title="Current workspace context"
               description={statusSummary}
               points={[
                 workspaceLoading ? "Workspace refresh is in progress" : "Workspace is ready",
@@ -534,16 +533,15 @@ export function WorkspaceShell({
 
           <section className="mt-8">
             <div className="mb-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">
-                Product pipeline coverage
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">
+                Pipeline flow
               </p>
               <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
-                Actionable stage flow
+                Operating path
               </h2>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">
-                These cards translate the backend pipeline into simple language
-                so the flow is easier to understand while still mapping to the
-                real system actions.
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-white/58">
+                These cards translate the backend pipeline into a smaller set of
+                understandable product steps before the detailed stage tracker below.
               </p>
             </div>
 
@@ -551,22 +549,22 @@ export function WorkspaceShell({
               <PipelineStageCard
                 step="Stage 01"
                 title="Collect feedback"
-                description="Create the run and bring public comments or reviews into the system."
+                description="Create or load a run and bring public feedback into the system."
               />
               <PipelineStageCard
                 step="Stage 02"
-                title="Prepare the text"
-                description="Clean the content and prepare language handling before analysis."
+                title="Prepare inputs"
+                description="Clean and normalize the evidence for downstream analysis."
               />
               <PipelineStageCard
                 step="Stage 03"
-                title="Create insights"
-                description="Generate pain points, priorities, review items, and search-ready knowledge."
+                title="Generate output"
+                description="Create insights, review items, and retrieval-ready documents."
               />
               <PipelineStageCard
                 step="Stage 04"
                 title="Use the output"
-                description="Sync approved items, create files, and confirm final readiness."
+                description="Sync approved items, export files, and confirm readiness."
               />
             </div>
           </section>
@@ -576,8 +574,8 @@ export function WorkspaceShell({
               <div
                 className={`rounded-3xl border px-4 py-4 text-sm ${
                   workspaceError
-                    ? "border-red-400/20 bg-red-400/10 text-red-100"
-                    : "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
+                    ? "border-red-400/18 bg-red-400/10 text-red-100"
+                    : "border-emerald-400/18 bg-emerald-400/10 text-emerald-100"
                 }`}
               >
                 {workspaceError || workspaceMessage}
@@ -591,7 +589,7 @@ export function WorkspaceShell({
                 disabled={
                   !currentRunId || actionLoadingKey !== null || workspaceLoading
                 }
-                className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/8 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Quick queue + start
               </button>
@@ -602,10 +600,20 @@ export function WorkspaceShell({
                   refreshWorkspace(currentRunId, "Workspace refreshed.")
                 }
                 disabled={workspaceLoading || actionLoadingKey !== null}
-                className="rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-5 py-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-2xl border border-cyan-400/28 bg-cyan-400/12 px-5 py-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/18 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {workspaceLoading ? "Refreshing..." : "Refresh everything"}
               </button>
+
+              {currentRunId ? (
+                <span className="badge badge-info self-center">
+                  Active run #{currentRunId}
+                </span>
+              ) : (
+                <span className="badge badge-warning self-center">
+                  No active run selected
+                </span>
+              )}
             </div>
           </div>
 

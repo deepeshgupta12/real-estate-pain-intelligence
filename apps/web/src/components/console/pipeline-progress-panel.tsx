@@ -11,34 +11,34 @@ type StageStatus = "completed" | "current" | "upcoming";
 
 function toneForStatus(status: StageStatus): string {
   if (status === "completed") {
-    return "border-emerald-400/25 bg-emerald-400/10";
+    return "border-emerald-400/18 bg-emerald-400/10";
   }
 
   if (status === "current") {
-    return "border-cyan-400/25 bg-cyan-400/10";
+    return "border-cyan-400/18 bg-cyan-400/10";
   }
 
-  return "border-white/10 bg-white/5";
+  return "border-white/8 bg-white/[0.025]";
 }
 
 function labelForStatus(status: StageStatus): string {
-  if (status === "completed") {
-    return "Done";
-  }
-
-  if (status === "current") {
-    return "Next focus";
-  }
-
+  if (status === "completed") return "Done";
+  if (status === "current") return "Current";
   return "Pending";
+}
+
+function badgeTone(status: StageStatus): string {
+  if (status === "completed") return "badge badge-success";
+  if (status === "current") return "badge badge-info";
+  return "badge badge-neutral";
 }
 
 export function PipelineProgressPanel({
   currentRun,
   readiness,
 }: PipelineProgressPanelProps) {
-  const checks = readiness?.checks;
   const counts = readiness?.counts;
+  const checks = readiness?.checks;
 
   const completionFlags = [
     Boolean(currentRun),
@@ -58,52 +58,52 @@ export function PipelineProgressPanel({
   const stages = [
     {
       title: "Run setup",
-      description: "A run exists and is ready for stage actions.",
+      description: "A run exists and is ready to be operated.",
       done: completionFlags[0],
     },
     {
-      title: "Collect public feedback",
-      description: "Bring raw comments, reviews, or posts into the workspace.",
+      title: "Collect feedback",
+      description: "Bring raw public feedback into the workspace.",
       done: completionFlags[1],
     },
     {
       title: "Clean text",
-      description: "Prepare the raw text so the downstream steps work with cleaner inputs.",
+      description: "Normalize the collected content into stable inputs.",
       done: completionFlags[2],
     },
     {
-      title: "Prepare language support",
-      description: "Resolve language and script signals for multilingual understanding.",
+      title: "Prepare language",
+      description: "Resolve multilingual and script-related signals.",
       done: completionFlags[3],
     },
     {
       title: "Generate insights",
-      description: "Turn user feedback into pain points, root causes, priority labels, and actions.",
+      description: "Turn evidence into structured pain-point output.",
       done: completionFlags[4],
     },
     {
-      title: "Prepare search-ready library",
-      description: "Make the processed run searchable for later analysis and exploration.",
+      title: "Build search library",
+      description: "Create retrieval-ready documents for later querying.",
       done: completionFlags[5],
     },
     {
       title: "Create review list",
-      description: "Prepare a human-review queue so the team can validate or reject outputs.",
+      description: "Prepare moderation-ready review queue items.",
       done: completionFlags[6],
     },
     {
       title: "Prepare Notion sync",
-      description: "Create the jobs needed for approved items to be sent into Notion.",
+      description: "Generate sync jobs for approved items.",
       done: completionFlags[7],
     },
     {
-      title: "Create downloadable files",
-      description: "Generate CSV, JSON, or PDF outputs for the run.",
+      title: "Create exports",
+      description: "Generate CSV, JSON, and PDF output.",
       done: completionFlags[8],
     },
     {
-      title: "Final readiness check",
-      description: "Confirm the run has the main outputs needed across the pipeline.",
+      title: "Final readiness",
+      description: "Confirm run completeness across the pipeline.",
       done: completionFlags[9],
     },
   ];
@@ -111,29 +111,31 @@ export function PipelineProgressPanel({
   return (
     <SectionShell
       id="pipeline-progress"
-      eyebrow="Progress view"
+      eyebrow="Stage tracker"
       title="Pipeline progress"
-      description="A simple stage tracker that translates the backend workflow into easy-to-understand progress steps."
+      description="A more readable view of where the active run stands, based on actual generated outputs rather than only the latest stage label."
     >
       {!currentRun ? (
-        <div className="rounded-2xl border border-white/10 bg-black/10 px-4 py-6 text-sm text-white/60">
-          Pick a run first to see progress across the full pipeline.
+        <div className="workspace-soft rounded-2xl px-4 py-6 text-sm text-white/58">
+          Pick a run first to see pipeline progress.
         </div>
       ) : (
         <>
-          <div className="mb-5 rounded-3xl border border-white/10 bg-black/10 p-5">
+          <div className="workspace-soft mb-5 rounded-3xl p-5">
             <div className="flex items-center gap-2">
               <h3 className="text-lg font-semibold text-white">
-                How to read this tracker
+                How to read this
               </h3>
               <InfoTip
-                title="How this tracker works"
-                description="Each stage becomes completed as soon as its main output exists. The first unfinished stage is shown as the next focus."
+                title="How this works"
+                description="The tracker marks steps as completed when their key outputs exist for the active run."
               />
             </div>
-            <p className="mt-3 text-sm leading-6 text-white/65">
-              The tracker does not depend only on the last stage label. It also
-              uses the actual outputs already created for the current run.
+
+            <p className="mt-3 text-sm leading-6 text-white/60">
+              The current step is the first unfinished stage. This keeps the
+              tracker aligned with actual backend state instead of relying only
+              on one stage string.
             </p>
           </div>
 
@@ -154,7 +156,7 @@ export function PipelineProgressPanel({
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/38">
                         Step {String(index + 1).padStart(2, "0")}
                       </p>
                       <h3 className="mt-2 text-lg font-semibold text-white">
@@ -162,12 +164,10 @@ export function PipelineProgressPanel({
                       </h3>
                     </div>
 
-                    <span className="rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[10px] uppercase tracking-wide text-white/70">
-                      {labelForStatus(status)}
-                    </span>
+                    <span className={badgeTone(status)}>{labelForStatus(status)}</span>
                   </div>
 
-                  <p className="mt-3 text-sm leading-6 text-white/65">
+                  <p className="mt-3 text-sm leading-6 text-white/62">
                     {stage.description}
                   </p>
                 </div>
@@ -176,13 +176,14 @@ export function PipelineProgressPanel({
           </div>
 
           {checks ? (
-            <div className="mt-5 rounded-3xl border border-white/10 bg-black/10 p-5">
+            <div className="workspace-soft mt-5 rounded-3xl p-5">
               <h3 className="text-lg font-semibold text-white">Readiness checks</h3>
+
               <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {Object.entries(checks).map(([key, value]) => (
                   <div
                     key={key}
-                    className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm"
+                    className="flex items-center justify-between rounded-2xl border border-white/8 bg-white/2 px-4 py-3 text-sm"
                   >
                     <span className="text-white/70">{key.replaceAll("_", " ")}</span>
                     <span className={value ? "text-emerald-300" : "text-amber-300"}>

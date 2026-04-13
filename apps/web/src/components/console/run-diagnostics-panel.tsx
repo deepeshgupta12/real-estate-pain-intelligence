@@ -9,6 +9,11 @@ type RunDiagnosticsPanelProps = {
   initialDiagnostics: RunDiagnosticsResponse | null;
 };
 
+function humanize(value: string | null | undefined): string {
+  if (!value) return "N/A";
+  return value.replaceAll("_", " ");
+}
+
 export function RunDiagnosticsPanel({
   initialRunId,
   initialDiagnostics,
@@ -43,65 +48,67 @@ export function RunDiagnosticsPanel({
   return (
     <SectionShell
       id="run-diagnostics"
-      eyebrow="Deep inspection"
+      eyebrow="Inspection"
       title="Run diagnostics"
-      description="Inspect a run’s latest event, stage timeline, readiness snapshot, failure state, and stale-run metadata."
+      description="Inspect stage flow, latest event, readiness shape, and failure state for one run."
     >
-      <div className="mb-5 flex flex-col gap-3 rounded-3xl border border-white/10 bg-black/10 p-4 md:flex-row md:items-end">
-        <div className="min-w-0 flex-1">
-          <label className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
-            Run ID
-          </label>
-          <input
-            value={runId}
-            onChange={(e) => setRunId(e.target.value)}
-            placeholder="Enter run id"
-            className="mt-2 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
-          />
-        </div>
+      <div className="workspace-soft mb-5 rounded-3xl p-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end">
+          <div className="min-w-0 flex-1">
+            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-white/40">
+              Run ID
+            </label>
+            <input
+              value={runId}
+              onChange={(e) => setRunId(e.target.value)}
+              placeholder="Enter run id"
+              className="field-shell mt-2 w-full rounded-2xl px-4 py-3 text-sm"
+            />
+          </div>
 
-        <button
-          onClick={handleLoad}
-          disabled={loading}
-          className="rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-5 py-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {loading ? "Loading..." : "Load diagnostics"}
-        </button>
+          <button
+            onClick={handleLoad}
+            disabled={loading}
+            className="rounded-2xl border border-cyan-400/28 bg-cyan-400/12 px-5 py-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/18 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loading ? "Loading..." : "Load diagnostics"}
+          </button>
+        </div>
       </div>
 
       {error ? (
-        <div className="mb-5 rounded-2xl border border-red-400/20 bg-red-400/8 px-4 py-3 text-sm text-red-100">
+        <div className="mb-5 rounded-2xl border border-red-400/18 bg-red-400/10 px-4 py-3 text-sm text-red-100">
           {error}
         </div>
       ) : null}
 
       {!diagnostics ? (
-        <div className="rounded-2xl border border-white/10 bg-black/10 px-4 py-6 text-sm text-white/60">
+        <div className="workspace-soft rounded-2xl px-4 py-6 text-sm text-white/58">
           Load a run id to inspect diagnostics.
         </div>
       ) : (
         <div className="space-y-5">
           <div className="grid gap-4 lg:grid-cols-4">
-            <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-white/45">Status</p>
+            <div className="workspace-soft rounded-2xl p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-white/40">Status</p>
               <p className="mt-2 text-xl font-semibold text-white">
-                {diagnostics.status}
+                {humanize(diagnostics.status)}
               </p>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-white/45">Stage</p>
+            <div className="workspace-soft rounded-2xl p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-white/40">Stage</p>
               <p className="mt-2 text-xl font-semibold text-white">
-                {diagnostics.pipeline_stage}
+                {humanize(diagnostics.pipeline_stage)}
               </p>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-white/45">Health</p>
+            <div className="workspace-soft rounded-2xl p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-white/40">Health</p>
               <p className="mt-2 text-xl font-semibold text-white">
-                {diagnostics.health_label}
+                {humanize(diagnostics.health_label)}
               </p>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-white/45">Events</p>
+            <div className="workspace-soft rounded-2xl p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-white/40">Events</p>
               <p className="mt-2 text-xl font-semibold text-white">
                 {diagnostics.total_events}
               </p>
@@ -109,86 +116,84 @@ export function RunDiagnosticsPanel({
           </div>
 
           <div className="grid gap-5 xl:grid-cols-2">
-            <div className="rounded-3xl border border-white/10 bg-black/10 p-5">
+            <div className="workspace-soft rounded-3xl p-5">
               <h3 className="text-lg font-semibold text-white">Latest event</h3>
-              <div className="mt-4 space-y-2 text-sm text-white/72">
-                <p>
-                  <span className="text-white/45">Type:</span>{" "}
-                  {diagnostics.latest_event?.event_type ?? "N/A"}
-                </p>
-                <p>
-                  <span className="text-white/45">Stage:</span>{" "}
-                  {diagnostics.latest_event?.stage ?? "N/A"}
-                </p>
-                <p>
-                  <span className="text-white/45">Status:</span>{" "}
-                  {diagnostics.latest_event?.status ?? "N/A"}
-                </p>
-                <p>
-                  <span className="text-white/45">Message:</span>{" "}
+              <div className="mt-4 grid gap-3">
+                <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-3 text-sm text-white/76">
+                  <span className="text-white/40">Type:</span>{" "}
+                  {humanize(diagnostics.latest_event?.event_type)}
+                </div>
+                <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-3 text-sm text-white/76">
+                  <span className="text-white/40">Stage:</span>{" "}
+                  {humanize(diagnostics.latest_event?.stage)}
+                </div>
+                <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-3 text-sm text-white/76">
+                  <span className="text-white/40">Status:</span>{" "}
+                  {humanize(diagnostics.latest_event?.status)}
+                </div>
+                <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-3 text-sm text-white/76">
+                  <span className="text-white/40">Message:</span>{" "}
                   {diagnostics.latest_event?.message ?? "N/A"}
-                </p>
-                <p>
-                  <span className="text-white/45">Created at:</span>{" "}
+                </div>
+                <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-3 text-sm text-white/76">
+                  <span className="text-white/40">Created at:</span>{" "}
                   {diagnostics.latest_event?.created_at ?? "N/A"}
-                </p>
+                </div>
               </div>
             </div>
 
-            <div className="rounded-3xl border border-white/10 bg-black/10 p-5">
+            <div className="workspace-soft rounded-3xl p-5">
               <h3 className="text-lg font-semibold text-white">Failure snapshot</h3>
-              <div className="mt-4 space-y-2 text-sm text-white/72">
-                <p>
-                  <span className="text-white/45">Failed:</span>{" "}
+              <div className="mt-4 grid gap-3">
+                <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-3 text-sm text-white/76">
+                  <span className="text-white/40">Failed:</span>{" "}
                   {diagnostics.failure_snapshot.failed ? "Yes" : "No"}
-                </p>
-                <p>
-                  <span className="text-white/45">Error:</span>{" "}
+                </div>
+                <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-3 text-sm text-white/76">
+                  <span className="text-white/40">Error:</span>{" "}
                   {diagnostics.failure_snapshot.error_message ?? "N/A"}
-                </p>
-                <p>
-                  <span className="text-white/45">Failed stage:</span>{" "}
-                  {diagnostics.failure_snapshot.failed_stage ?? "N/A"}
-                </p>
-                <p>
-                  <span className="text-white/45">Failed at:</span>{" "}
+                </div>
+                <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-3 text-sm text-white/76">
+                  <span className="text-white/40">Failed stage:</span>{" "}
+                  {humanize(diagnostics.failure_snapshot.failed_stage)}
+                </div>
+                <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-3 text-sm text-white/76">
+                  <span className="text-white/40">Failed at:</span>{" "}
                   {diagnostics.failure_snapshot.failed_at ?? "N/A"}
-                </p>
-                <p>
-                  <span className="text-white/45">Last successful stage:</span>{" "}
-                  {diagnostics.failure_snapshot.last_successful_stage ?? "N/A"}
-                </p>
+                </div>
+                <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-3 text-sm text-white/76">
+                  <span className="text-white/40">Last successful stage:</span>{" "}
+                  {humanize(diagnostics.failure_snapshot.last_successful_stage)}
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="rounded-3xl border border-white/10 bg-black/10 p-5">
+          <div className="workspace-soft rounded-3xl p-5">
             <h3 className="text-lg font-semibold text-white">Stage timeline</h3>
             <div className="mt-4 overflow-x-auto console-scrollbar">
-              <table className="min-w-full border-separate border-spacing-y-2">
+              <table className="data-table min-w-225">
                 <thead>
-                  <tr className="text-left text-xs uppercase tracking-[0.16em] text-white/45">
-                    <th className="px-4 py-2">Stage</th>
-                    <th className="px-4 py-2">First event</th>
-                    <th className="px-4 py-2">Last event</th>
-                    <th className="px-4 py-2">Latest status</th>
-                    <th className="px-4 py-2">Events</th>
-                    <th className="px-4 py-2">Duration</th>
+                  <tr>
+                    <th>Stage</th>
+                    <th>First event</th>
+                    <th>Last event</th>
+                    <th>Latest status</th>
+                    <th>Events</th>
+                    <th>Duration</th>
                   </tr>
                 </thead>
                 <tbody>
                   {diagnostics.stage_timeline.map((item) => (
-                    <tr key={item.stage} className="bg-white/5 text-sm text-white/72">
-                      <td className="rounded-l-2xl px-4 py-3 font-medium text-white">
-                        {item.stage}
+                    <tr key={item.stage} className="data-row-hover">
+                      <td className="font-medium text-white">
+                        {humanize(item.stage)}
                       </td>
-                      <td className="px-4 py-3">{item.first_event_at}</td>
-                      <td className="px-4 py-3">{item.last_event_at}</td>
-                      <td className="px-4 py-3">{item.latest_status}</td>
-                      <td className="px-4 py-3">{item.event_count}</td>
-                      <td className="rounded-r-2xl px-4 py-3">
-                        {item.duration_seconds}s
-                      </td>
+                      <td>{item.first_event_at}</td>
+                      <td>{item.last_event_at}</td>
+                      <td>{humanize(item.latest_status)}</td>
+                      <td>{item.event_count}</td>
+                      <td>{item.duration_seconds}s</td>
                     </tr>
                   ))}
                 </tbody>
@@ -197,15 +202,15 @@ export function RunDiagnosticsPanel({
           </div>
 
           <div className="grid gap-5 xl:grid-cols-2">
-            <div className="rounded-3xl border border-white/10 bg-black/10 p-5">
+            <div className="workspace-soft rounded-3xl p-5">
               <h3 className="text-lg font-semibold text-white">Readiness checks</h3>
               <div className="mt-4 grid gap-2">
                 {Object.entries(diagnostics.readiness_checks).map(([key, value]) => (
                   <div
                     key={key}
-                    className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm"
+                    className="flex items-center justify-between rounded-2xl border border-white/8 bg-white/2 px-4 py-3 text-sm"
                   >
-                    <span className="text-white/70">{key}</span>
+                    <span className="text-white/70">{humanize(key)}</span>
                     <span className={value ? "text-emerald-300" : "text-amber-300"}>
                       {String(value)}
                     </span>
@@ -214,15 +219,15 @@ export function RunDiagnosticsPanel({
               </div>
             </div>
 
-            <div className="rounded-3xl border border-white/10 bg-black/10 p-5">
+            <div className="workspace-soft rounded-3xl p-5">
               <h3 className="text-lg font-semibold text-white">Readiness counts</h3>
               <div className="mt-4 grid gap-2">
                 {Object.entries(diagnostics.readiness_counts).map(([key, value]) => (
                   <div
                     key={key}
-                    className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm"
+                    className="flex items-center justify-between rounded-2xl border border-white/8 bg-white/2 px-4 py-3 text-sm"
                   >
-                    <span className="text-white/70">{key}</span>
+                    <span className="text-white/70">{humanize(key)}</span>
                     <span className="text-white">{value}</span>
                   </div>
                 ))}

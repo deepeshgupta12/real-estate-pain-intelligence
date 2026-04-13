@@ -11,4 +11,8 @@ class ScrapeExecutionResponse(BaseModel):
     items_processed: int
     persisted_evidence_count: int
     deduplicated_count: int
+    live_items_count: int
+    stub_items_count: int
+    live_fetch_enabled: bool
+    fallback_to_stub_used: bool
     orchestrator_notes: str | None
