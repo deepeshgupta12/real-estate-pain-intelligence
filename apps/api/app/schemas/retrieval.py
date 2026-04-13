@@ -27,6 +27,7 @@ class RetrievalSearchResult(BaseModel):
     document_type: str
     language_code: str | None
     score: float
+    score_type: str
     document_text: str
     metadata_json: dict[str, Any]
     created_at: datetime
@@ -43,6 +44,10 @@ class RetrievalDocumentResponse(BaseModel):
     language_code: str | None
     retrieval_status: str
     token_count: int
+    embedding_status: str
+    embedding_model_name: str | None
+    embedding_dimensions: int | None
+    embedded_at: datetime | None
     metadata_json: dict[str, Any]
     created_at: datetime
 

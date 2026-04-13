@@ -53,6 +53,12 @@ class Settings(BaseSettings):
     notion_decision_property_name: str = "Decision"
     notion_default_title_prefix: str = "REPI"
 
+    embedding_provider: Literal["deterministic_hash"] = "deterministic_hash"
+    embedding_model_name: str = "hash-embedding-v1"
+    embedding_dimensions: int = 64
+    retrieval_vector_distance: Literal["cosine"] = "cosine"
+    retrieval_search_default_top_k: int = 5
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

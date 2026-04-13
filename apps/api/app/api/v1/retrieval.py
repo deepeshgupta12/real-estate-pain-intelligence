@@ -57,6 +57,7 @@ def search_retrieval(
             document_type=row.document_type,
             language_code=row.language_code,
             score=score,
+            score_type="vector_cosine_similarity",
             document_text=row.document_text,
             metadata_json=row.metadata_json,
             created_at=row.created_at,

@@ -53,11 +53,15 @@ def test_retrieval_index_and_search_flow() -> None:
     documents_payload = documents_response.json()
     assert len(documents_payload) >= 1
     assert documents_payload[0]["retrieval_status"] == "indexed"
+    assert documents_payload[0]["embedding_status"] == "embedded"
+    assert documents_payload[0]["embedding_model_name"] == "hash-embedding-v1"
+    assert documents_payload[0]["embedding_dimensions"] == 64
+    assert documents_payload[0]["embedded_at"] is not None
 
     search_response = client.post(
         "/api/v1/retrieval/search",
         json={
-            "query": "outdated agent listing",
+            "query": "outdated listing agent response",
             "top_k": 5,
             "run_id": run_id,
         },
@@ -66,4 +70,5 @@ def test_retrieval_index_and_search_flow() -> None:
     search_payload = search_response.json()
     assert len(search_payload) >= 1
     assert search_payload[0]["score"] > 0
+    assert search_payload[0]["score_type"] == "vector_cosine_similarity"
     assert search_payload[0]["document_text"] is not None
