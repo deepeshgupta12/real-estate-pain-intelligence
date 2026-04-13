@@ -3,6 +3,15 @@
 :root {
   --background: #07111f;
   --foreground: #f8fafc;
+  --panel: rgba(255, 255, 255, 0.05);
+  --panel-strong: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.1);
+  --muted: rgba(248, 250, 252, 0.6);
+  --muted-strong: rgba(248, 250, 252, 0.78);
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --info: #22d3ee;
 }
 
 html {
@@ -35,7 +44,42 @@ select {
   font: inherit;
 }
 
+button {
+  cursor: pointer;
+}
+
 ::selection {
   background: rgba(34, 211, 238, 0.25);
   color: #ffffff;
+}
+
+.console-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.console-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+
+.console-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.panel-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.metric-positive {
+  color: #86efac;
+}
+
+.metric-warning {
+  color: #fcd34d;
+}
+
+.metric-negative {
+  color: #fca5a5;
 }
