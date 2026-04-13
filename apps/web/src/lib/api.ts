@@ -16,6 +16,50 @@ export type ApiMetaResponse = {
   openapi_url: string;
 };
 
+export type ScrapeRunCreatePayload = {
+  source_name: string;
+  target_brand: string;
+  status?: string;
+  pipeline_stage?: string;
+  trigger_mode?: string;
+  items_discovered?: number;
+  items_processed?: number;
+  error_message?: string;
+  orchestrator_notes?: string;
+  started_at?: string | null;
+  last_heartbeat_at?: string | null;
+  completed_at?: string | null;
+};
+
+export type ScrapeRunResponse = {
+  id: number;
+  source_name: string;
+  target_brand: string;
+  status: string;
+  pipeline_stage: string;
+  trigger_mode: string;
+  items_discovered: number;
+  items_processed: number;
+  error_message: string | null;
+  orchestrator_notes: string | null;
+  started_at: string | null;
+  last_heartbeat_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type OrchestratorDispatchResponse = {
+  run_id: number;
+  status: string;
+  pipeline_stage: string;
+  trigger_mode: string;
+  orchestrator_notes: string | null;
+  started_at: string | null;
+  last_heartbeat_at: string | null;
+  completed_at: string | null;
+};
+
 export type FinalHardeningOverviewResponse = {
   runs_total: number;
   runs_completed: number;
@@ -54,7 +98,7 @@ export type QueueHealthItem = {
   items_processed: number;
   last_heartbeat_at: string | null;
   orchestrator_notes: string | null;
-  heartbeat_age_seconds: number;
+  heartbeat_age_seconds: number | null;
   is_stale: boolean;
   health_label: string;
   latest_event_type: string | null;
@@ -98,7 +142,7 @@ export type RunDiagnosticsResponse = {
   updated_at: string;
   error_message: string | null;
   orchestrator_notes: string | null;
-  heartbeat_age_seconds: number;
+  heartbeat_age_seconds: number | null;
   is_stale: boolean;
   health_label: string;
   total_events: number;
@@ -126,8 +170,119 @@ export type RunDiagnosticsResponse = {
   };
 };
 
-export type ReviewSummaryResponse = {
+export type RunNormalizationResponse = {
   run_id: number;
+  total_evidence: number;
+  normalized_count: number;
+  pending_count: number;
+  failed_count: number;
+  pipeline_stage: string;
+  status: string;
+  orchestrator_notes: string | null;
+};
+
+export type RunMultilingualResponse = {
+  run_id: number;
+  total_evidence: number;
+  processed_count: number;
+  pending_count: number;
+  failed_count: number;
+  pipeline_stage: string;
+  status: string;
+  orchestrator_notes: string | null;
+};
+
+export type RunIntelligenceResponse = {
+  run_id: number;
+  total_evidence: number;
+  insights_generated: number;
+  llm_generated_count: number;
+  deterministic_generated_count: number;
+  failed_count: number;
+  pipeline_stage: string;
+  status: string;
+  orchestrator_notes: string | null;
+};
+
+export type RetrievalIndexResponse = {
+  run_id: number;
+  indexed_count: number;
+  pipeline_stage: string;
+  status: string;
+  orchestrator_notes: string | null;
+};
+
+export type HumanReviewGenerateResponse = {
+  run_id: number;
+  generated_count: number;
+  pipeline_stage: string;
+  status: string;
+  orchestrator_notes: string | null;
+};
+
+export type NotionSyncGenerateResponse = {
+  run_id: number;
+  generated_count: number;
+  pipeline_stage: string;
+  status: string;
+  orchestrator_notes: string | null;
+};
+
+export type NotionSyncExecutionSummaryResponse = {
+  run_id: number;
+  attempted_count: number;
+  synced_count: number;
+  failed_count: number;
+  retrying_count: number;
+  pipeline_stage: string;
+  status: string;
+  orchestrator_notes: string | null;
+};
+
+export type ExportGenerateResponse = {
+  run_id: number;
+  generated_count: number;
+  pipeline_stage: string;
+  status: string;
+  orchestrator_notes: string | null;
+};
+
+export type RunReadinessResponse = {
+  run_id: number;
+  status: string;
+  pipeline_stage: string;
+  ready_for_finalization: boolean;
+  checks: {
+    has_evidence: boolean;
+    normalization_ready: boolean;
+    multilingual_ready: boolean;
+    intelligence_ready: boolean;
+    retrieval_ready: boolean;
+    human_review_ready: boolean;
+    review_console_ready: boolean;
+    notion_ready: boolean;
+    export_ready: boolean;
+    run_not_failed: boolean;
+  };
+  counts: {
+    evidence_count: number;
+    normalized_count: number;
+    multilingual_count: number;
+    insight_count: number;
+    retrieval_count: number;
+    embedded_retrieval_count: number;
+    review_count: number;
+    pending_review_count: number;
+    approved_review_count: number;
+    rejected_review_count: number;
+    notion_sync_count: number;
+    export_count: number;
+    run_event_count: number;
+  };
+};
+
+export type ReviewSummaryResponse = {
+  run_id: number | null;
   total_items: number;
   pending_review_count: number;
   reviewed_count: number;
@@ -205,6 +360,10 @@ export type BulkReviewPayload = {
   reviewer_notes?: string;
 };
 
+export type ExportGeneratePayload = {
+  export_formats: string[];
+};
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
@@ -226,6 +385,19 @@ function buildUrl(path: string, query?: FetchOptions["query"]): string {
   return url.toString();
 }
 
+function buildErrorMessage(path: string, message: string): string {
+  try {
+    const parsed = JSON.parse(message) as { detail?: string };
+    if (parsed.detail) {
+      return parsed.detail;
+    }
+  } catch {
+    // Ignore JSON parsing failure and fall back to raw text.
+  }
+
+  return message || `Failed to fetch ${path}`;
+}
+
 async function fetchJson<T>(path: string, options?: FetchOptions): Promise<T> {
   const response = await fetch(buildUrl(path, options?.query), {
     cache: "no-store",
@@ -238,7 +410,7 @@ async function fetchJson<T>(path: string, options?: FetchOptions): Promise<T> {
 
   if (!response.ok) {
     const message = await response.text();
-    throw new Error(message || `Failed to fetch ${path}`);
+    throw new Error(buildErrorMessage(path, message));
   }
 
   return response.json();
@@ -250,6 +422,49 @@ export async function fetchApiHealth(): Promise<ApiHealthResponse> {
 
 export async function fetchApiMeta(): Promise<ApiMetaResponse> {
   return fetchJson<ApiMetaResponse>("/api/v1/meta");
+}
+
+export async function fetchSupportedSources(): Promise<string[]> {
+  return fetchJson<string[]>("/api/v1/scrape-execution/sources");
+}
+
+export async function createScrapeRun(
+  payload: ScrapeRunCreatePayload,
+): Promise<ScrapeRunResponse> {
+  return fetchJson<ScrapeRunResponse>("/api/v1/runs", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchScrapeRuns(): Promise<ScrapeRunResponse[]> {
+  return fetchJson<ScrapeRunResponse[]>("/api/v1/runs");
+}
+
+export async function fetchScrapeRun(runId: number): Promise<ScrapeRunResponse> {
+  return fetchJson<ScrapeRunResponse>(`/api/v1/runs/${runId}`);
+}
+
+export async function dispatchRun(
+  runId: number,
+): Promise<OrchestratorDispatchResponse> {
+  return fetchJson<OrchestratorDispatchResponse>(
+    `/api/v1/orchestrator/dispatch/${runId}`,
+    {
+      method: "POST",
+    },
+  );
+}
+
+export async function startRun(
+  runId: number,
+): Promise<OrchestratorDispatchResponse> {
+  return fetchJson<OrchestratorDispatchResponse>(
+    `/api/v1/orchestrator/start/${runId}`,
+    {
+      method: "POST",
+    },
+  );
 }
 
 export async function fetchFinalHardeningOverview(): Promise<FinalHardeningOverviewResponse> {
@@ -266,6 +481,95 @@ export async function fetchQueueHealth(): Promise<QueueHealthItem[]> {
 
 export async function fetchRunDiagnostics(runId: number): Promise<RunDiagnosticsResponse> {
   return fetchJson<RunDiagnosticsResponse>(`/api/v1/orchestrator/diagnostics/${runId}`);
+}
+
+export async function fetchRunReadiness(runId: number): Promise<RunReadinessResponse> {
+  return fetchJson<RunReadinessResponse>(`/api/v1/final-hardening/readiness/${runId}`);
+}
+
+export async function executeScrapeRun(
+  runId: number,
+): Promise<{
+  run_id: number;
+  source_name: string;
+  target_brand: string;
+  status: string;
+  pipeline_stage: string;
+  items_discovered: number;
+  items_processed: number;
+  persisted_evidence_count: number;
+  deduplicated_count: number;
+  orchestrator_notes: string | null;
+}> {
+  return fetchJson(`/api/v1/scrape-execution/${runId}`, {
+    method: "POST",
+  });
+}
+
+export async function normalizeRun(
+  runId: number,
+): Promise<RunNormalizationResponse> {
+  return fetchJson<RunNormalizationResponse>(`/api/v1/normalization/${runId}`, {
+    method: "POST",
+  });
+}
+
+export async function processMultilingualRun(
+  runId: number,
+): Promise<RunMultilingualResponse> {
+  return fetchJson<RunMultilingualResponse>(`/api/v1/multilingual/${runId}`, {
+    method: "POST",
+  });
+}
+
+export async function processRunIntelligence(
+  runId: number,
+): Promise<RunIntelligenceResponse> {
+  return fetchJson<RunIntelligenceResponse>(`/api/v1/intelligence/${runId}`, {
+    method: "POST",
+  });
+}
+
+export async function indexRunRetrieval(
+  runId: number,
+): Promise<RetrievalIndexResponse> {
+  return fetchJson<RetrievalIndexResponse>(`/api/v1/retrieval/index/${runId}`, {
+    method: "POST",
+  });
+}
+
+export async function generateHumanReviewQueue(
+  runId: number,
+): Promise<HumanReviewGenerateResponse> {
+  return fetchJson<HumanReviewGenerateResponse>(`/api/v1/human-review/generate/${runId}`, {
+    method: "POST",
+  });
+}
+
+export async function generateNotionSyncJobs(
+  runId: number,
+): Promise<NotionSyncGenerateResponse> {
+  return fetchJson<NotionSyncGenerateResponse>(`/api/v1/notion-sync/generate/${runId}`, {
+    method: "POST",
+  });
+}
+
+export async function executeNotionSyncJobsForRun(
+  runId: number,
+): Promise<NotionSyncExecutionSummaryResponse> {
+  return fetchJson<NotionSyncExecutionSummaryResponse>(`/api/v1/notion-sync/execute-run/${runId}`, {
+    method: "POST",
+  });
+}
+
+export async function generateExportJobs(
+  runId: number,
+  payload: ExportGeneratePayload,
+): Promise<ExportGenerateResponse> {
+  return fetchJson<ExportGenerateResponse>(`/api/v1/exports/generate/${runId}`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function fetchRunEvents(params?: {

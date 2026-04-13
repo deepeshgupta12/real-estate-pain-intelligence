@@ -46,6 +46,18 @@ Real Estate Pain Point Intelligence Platform
 ### Step 0 — Cleanup and reset
 Status: Completed
 
+#### Delivered
+- Monorepo structure created
+- FastAPI backend skeleton created
+- Next.js frontend skeleton created
+- Root documentation files created
+- Implementation tracker created
+- Health endpoint added
+- Frontend-to-backend health connectivity added
+- Initial polished dashboard shell created
+- Python package initialization added
+- Pytest import path issue resolved via conftest
+
 ### Step 1 — Repository setup + backend/frontend foundation
 Status: Completed
 
@@ -471,16 +483,68 @@ Status: Completed
 - `docs/implementation-tracker.md`
 
 #### Test notes
-- Frontend should build successfully with current Next.js setup
+- Frontend build passes successfully with current Next.js setup
 - Console uses existing Step 23 and Step 24 backend APIs directly
 - No extra frontend dependency was introduced
 - Interactive review actions are wired against live backend routes
 
 #### Known issues
 - Frontend uses direct browser-to-backend calls and assumes backend is reachable on configured API base URL
+- CORS middleware is required on the backend for browser-driven approve / reject and bulk review actions
 - No authentication or role-based UI constraints yet
 - Pagination is basic and can be expanded later
 - Additional sections for evidence explorer, retrieval explorer, and export center can be added in later steps
 
-#### Next step after completion
-- Step 26 — Multi-tenant architecture foundation
+### Step 26A — Full pipeline action workspace
+Status: In Progress
+
+#### Delivered in this implementation
+- Frontend run setup section added with:
+  - create new run
+  - load existing run
+  - friendlier labels and placeholders
+- Current run summary section added with:
+  - basic run details
+  - readiness snapshot
+  - easier wording
+- Pipeline progress tracker added with:
+  - human-friendly stage names
+  - completed / next focus / pending states
+- Pipeline action section added for:
+  - start data collection
+  - clean text
+  - prepare language support
+  - generate insights
+  - prepare search-ready knowledge
+  - create review list
+  - prepare Notion sync
+  - run Notion sync
+  - create files
+  - check final readiness
+- Workspace-wide refresh flow added so monitoring sections can be refreshed after actions
+- Info-tip component added to explain terms in simple language
+- Existing queue health, diagnostics, events, and review console remain available below the new action workspace
+- Existing backend APIs are reused for Step 26A, so no new backend endpoints are required
+
+#### Implemented files
+- `apps/web/src/app/page.tsx`
+- `apps/web/src/lib/api.ts`
+- `apps/web/src/components/app-shell/sidebar.tsx`
+- `apps/web/src/components/app-shell/topbar.tsx`
+- `apps/web/src/components/ui/info-tip.tsx`
+- `apps/web/src/components/console/workspace-shell.tsx`
+- `apps/web/src/components/console/run-setup-panel.tsx`
+- `apps/web/src/components/console/current-run-panel.tsx`
+- `apps/web/src/components/console/pipeline-progress-panel.tsx`
+- `apps/web/src/components/console/pipeline-actions-panel.tsx`
+- `docs/implementation-tracker.md`
+
+#### Test notes
+- This step should allow the frontend to operate the run flow instead of only observing it
+- Existing backend action endpoints are expected to be available and reachable from the browser
+- Review moderation should keep working as before
+- Notion sync execution still depends on backend configuration and approved review items
+- Export generation still depends on evidence existing for the selected run
+
+#### Next step after confirmation
+- Step 26B — optional deeper output workspaces such as evidence explorer, retrieval explorer, export center, and richer stage-level result views
