@@ -1226,6 +1226,22 @@ Branch: `feat/step-35-enhancements`
 - Bulk action buttons now show selected count inline: "✓ Approve Selected (N)"
 - Files changed: `apps/web/src/components/console/review-console-panel.tsx`
 
+**Review Queue — live counts + status filter tabs:**
+- Fixed: pending count was not updating after approving/rejecting items (was derived from stale backend `summary` state)
+- Fixed: no way to see which specific items were still pending after bulk actions
+- `liveCounts` now computed via `useMemo` from local `queue` state — updates instantly after every approve/reject action with no backend re-fetch needed
+- `StatusFilter = "all" | "pending" | "approved" | "rejected"` type added
+- `getItemStatus(item)` helper derives status from `reviewer_decision ?? review_status`
+- Filter tab pills rendered below stat cards: Pending (amber), Approved (green), Rejected (red), All (blue), each showing live count
+- Default filter = `"pending"` so users land on actionable items immediately
+- Clickable stat cards also set the active filter on click
+- Per-filter empty states: "🎉 All caught up — no pending reviews!" when pending tab is empty
+- Color-coded item cards: green tint = approved, red tint = rejected, blue tint = selected
+- Bulk actions toolbar only rendered when `statusFilter === "pending"` (irrelevant for other views)
+- Inline approve/reject buttons on expand only shown for pending items
+- Pagination resets to page 1 whenever the filter tab changes
+- Files changed: `apps/web/src/components/console/review-console-panel.tsx`
+
 **App reviews scraper — dual-store, 100 reviews, sentiment filter:**
 - Now fetches up to 100 most-recent reviews from BOTH Google Play Store AND Apple iOS App Store per run
 - Each item tagged with `store_platform: "google_play"` or `store_platform: "ios_app_store"` in metadata
