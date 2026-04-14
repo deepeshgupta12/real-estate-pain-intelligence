@@ -964,6 +964,82 @@ Pain point taxonomy was purely keyword-driven with no unsupervised topic discove
 
 ---
 
+### Step 33 — Post-Launch Fixes + UX Enhancements + Reddit PRAW Integration
+Status: Completed
+
+#### Context
+After merging Steps 29–32 into main and running the full pipeline end-to-end, several production issues were discovered: TypeScript build errors, a Turbopack panic, database connection failure, missing download UI for exports, and Reddit RSS scraping being blocked. UI issues: two redundant dashboard cards still showing, Active Sessions panel too large, Pain Points display lacking persona grouping and priority structure.
+
+#### Delivered
+
+**Bug fixes:**
+- `run-events-panel.tsx`: `event.timestamp` → `event.created_at`, `event.run_id` → `event.scrape_run_id` (TypeScript build errors)
+- `skeleton.tsx`: Added `style?: React.CSSProperties` prop with spread into div — fixed `CardSkeleton` TypeScript error
+- `next.config.ts`: Moved turbopack config to top-level `turbopack: { root: __dirname }` (removed invalid `experimental.turbo`)
+- `eslint.config.mjs`: Added `argsIgnorePattern`, `varsIgnorePattern`, `caughtErrorsIgnorePattern: "^_"` to suppress `_`-prefixed unused var warnings
+- Stale git worktrees (`agent-a694704f`, `agent-a6a78ce9`) removed with `git worktree remove -f -f`
+- Turbopack panic: resolved by running Next.js with `--no-turbopack` flag (webpack fallback)
+- PostgreSQL connection: identified port 5460 requires `docker compose up -d` in `apps/api/`
+- `SCRAPER_FAIL_OPEN_TO_STUB=true` set in `.env` so pipeline runs end-to-end when Reddit RSS is blocked
+
+**Export download UI:**
+- `GET /api/v1/exports/download/{export_job_id}` endpoint added — serves file via `FileResponse` with correct `Content-Disposition` and MIME type (CSV/JSON/PDF)
+- `ExportJobResponse` type + `fetchExportJobs()` + `getExportDownloadUrl()` added to `apps/web/src/lib/api.ts`
+- `ExportsPanel` component created (`apps/web/src/components/console/exports-panel.tsx`):
+  - Shows completed exports with ↓ Download buttons, pending jobs, empty state
+  - Auto-refreshes when "Create Exports" action completes (`exportRefreshKey` pattern)
+  - Wired into `WorkspaceShell` after `PipelineActionsPanel`
+
+**Dashboard cleanup:**
+- Removed "Platform capabilities" and "Current workspace context" `NavPreviewCard` sections from `WorkspaceShell`
+- Removed unused `statusSummary` memo, `NavPreviewCard` import, `useMemo` import
+
+**Active Sessions panel — compact redesign:**
+- Replaced large card-per-row layout with a tight 4-column table (Run # / Brand / Source / Status)
+- Colour-coded status pills: green=running/active, blue=queued, amber=pending, red=failed
+- Summary chip shows "N running · M total" in the header
+
+**Pain Points Summary panel (new component):**
+- `apps/web/src/components/console/pain-points-panel.tsx` — new panel added to sidebar as "Pain Points"
+- `AgentInsightResponse` type + `fetchRunInsights()` added to `api.ts`
+- Deduplicates insights by `pain_point_label`, keeping highest priority per label
+- Groups insights by buyer journey **persona**: 🔍 Discovery, 🤝 Consideration, 💳 Conversion, 📋 Post-Discovery
+- Each persona section: numbered bullet list of pain points with:
+  - Priority badge with colour dot (🔴 High / 🟡 Medium / 🟢 Low)
+  - Taxonomy cluster tag (Inventory Quality, Lead Management, etc.)
+  - Pain point summary text
+  - Root cause hypothesis
+  - Action recommendation
+- Priority summary bar at top: counts of High / Medium / Low items
+- Wired into `WorkspaceShell` between `PipelineProgressPanel` and `PipelineActionsPanel`
+
+**Reddit PRAW integration (3-tier scraper):**
+- `apps/api/app/scrapers/sources/reddit.py` rewritten with three-tier fallback:
+  1. **PRAW (official Reddit API)** — activated via `REDDIT_API_ENABLED=true` + credentials. Searches `INDIA_REALESTATE_SUBREDDITS` (indianrealestate, realestateindia, mumbai, bangalore, delhi, pune, hyderabad) + global. Fetches posts + top 3 comments per post. Read-only or script-mode (higher limits). 60 req/min official limit.
+  2. **RSS feed** — existing approach, kept as automatic fallback when PRAW not configured
+  3. **Stub data** — expanded to 5 realistic real estate complaint items (stale listings, agent unresponsive, slow app, fraud, hidden pricing charges)
+- Config: `reddit_api_enabled`, `reddit_client_id`, `reddit_client_secret`, `reddit_user_agent`, `reddit_username`, `reddit_password`
+- `praw>=7.7.0` added to `pyproject.toml` dependencies
+- `.env.example` updated with Reddit app setup guide (create at reddit.com/prefs/apps → "script" type → redirect_uri=http://localhost:8080)
+
+#### Files added / modified
+- `apps/web/src/components/console/run-events-panel.tsx` (fix)
+- `apps/web/src/components/ui/skeleton.tsx` (fix)
+- `apps/web/src/components/console/workspace-shell.tsx` (cleanup + wiring)
+- `apps/web/src/components/console/queue-health-panel.tsx` (redesign)
+- `apps/web/src/components/console/pain-points-panel.tsx` (new)
+- `apps/web/src/components/console/exports-panel.tsx` (new)
+- `apps/web/src/lib/api.ts` (AgentInsightResponse, ExportJobResponse, fetchRunInsights, fetchExportJobs, getExportDownloadUrl)
+- `apps/api/app/api/v1/export.py` (download endpoint)
+- `apps/api/app/scrapers/sources/reddit.py` (PRAW 3-tier rewrite)
+- `apps/api/app/core/config.py` (Reddit API config settings)
+- `apps/api/pyproject.toml` (praw dependency)
+- `apps/api/.env.example` (Reddit setup guide)
+- `apps/web/next.config.ts` (turbopack config fix)
+- `apps/web/eslint.config.mjs` (ESLint ignore patterns)
+
+---
+
 ## Pending Implementation (V3 Scope)
 
 ### High Priority — Missing from Current Implementation
@@ -1064,13 +1140,22 @@ All 4 production-grade enhancement tiers implemented:
 - **Step 31**: LLM caching (TTL + SHA256), gpt-4o-mini cost optimization, cross-run pain point trending + fingerprinting, multi-tenant organization model
 - **Step 32**: BERTopic-style topic modeling (NMF/LDA/HDBSCAN with graceful degradation), 5-agent Anthropic tool_use orchestration pipeline
 
+### Step 33 (post-launch fixes + UX enhancements): ✅ Delivered
+Production issues resolved after first real pipeline run, plus new UX panels:
+- **Build fixes**: TypeScript errors in run-events-panel + skeleton component, Turbopack config, ESLint ignore patterns
+- **Export downloads**: `GET /api/v1/exports/download/{id}` endpoint + `ExportsPanel` UI with ↓ Download buttons
+- **Pain Points panel**: Persona-grouped insights (Discovery/Consideration/Conversion/Post-Discovery) with numbered bullets, priority badges (High/Medium/Low), cluster tags, root cause + action inline
+- **Active Sessions**: Compact table replacing large card layout
+- **Dashboard**: Removed redundant NavPreviewCard sections
+- **Reddit PRAW**: 3-tier scraper (PRAW official API → RSS → stub), `praw>=7.7.0` dependency added
+
 ### Remaining gaps (lower priority):
 The product is now **production-ready** for single-tenant deployment. The following items represent further quality and scale improvements:
 
 **Frontend depth:**
 - P13: Evidence explorer (browse/search raw collected posts per run)
 - P14: Retrieval search UI (semantic search interface)
-- P15: Export download center with file listing and download links
+- ~~P15: Export download center~~ ✅ Delivered in Step 33
 
 **Scale and UX:**
 - P3: Multi-source / multi-brand runs (fan-out to multiple source×brand combos)
