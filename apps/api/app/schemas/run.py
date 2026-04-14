@@ -33,7 +33,8 @@ class ScrapeRunCreateRequest(BaseModel):
     @field_validator("source_name")
     @classmethod
     def validate_source_name(cls, v: str) -> str:
-        allowed = {"reddit", "youtube", "app_reviews", "x_posts", "review_sites"}
+        # Must match ScraperRegistry keys (i.e. each scraper's source_name attribute)
+        allowed = {"reddit", "youtube", "app_reviews", "x", "review_sites"}
         if v not in allowed:
             raise ValueError(f"source_name must be one of: {', '.join(sorted(allowed))}")
         return v
