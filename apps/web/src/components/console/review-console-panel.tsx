@@ -13,6 +13,8 @@ import {
 } from "@/lib/api";
 import { SectionShell } from "@/components/console/section-shell";
 
+const PAGE_SIZE = 20;
+
 type ReviewConsolePanelProps = {
   initialRunId: number | null;
   activeRunId: number | null;
@@ -51,8 +53,24 @@ export function ReviewConsolePanel({
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+
+  // Pagination derived values
+  const totalPages = Math.max(1, Math.ceil(queue.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const pageStart = (safePage - 1) * PAGE_SIZE;
+  const pageEnd = pageStart + PAGE_SIZE;
+  const pageItems = queue.slice(pageStart, pageEnd);
+  const pageItemIds = pageItems.map((i) => i.id);
+  const allPageSelected =
+    pageItemIds.length > 0 && pageItemIds.every((id) => selectedIdSet.has(id));
+
+  useEffect(() => {
+    setCurrentPage(1);
+    setSelectedIds([]);
+  }, [queue]);
 
   useEffect(() => {
     const nextRunValue = activeRunId ? String(activeRunId) : "";
@@ -74,7 +92,7 @@ export function ReviewConsolePanel({
           fetchReviewQueue({
             runId: parsedRunId,
             includeDetails: true,
-            limit: 50,
+            limit: 500,
             offset: 0,
           }),
         ]);
@@ -181,6 +199,30 @@ export function ReviewConsolePanel({
     );
   }
 
+  function toggleSelectAll() {
+    if (allPageSelected) {
+      // Deselect all on this page
+      setSelectedIds((current) =>
+        current.filter((id) => !pageItemIds.includes(id))
+      );
+    } else {
+      // Select all on this page (merge with existing selections from other pages)
+      setSelectedIds((current) => {
+        const merged = new Set(current);
+        pageItemIds.forEach((id) => merged.add(id));
+        return Array.from(merged);
+      });
+    }
+  }
+
+  function selectAllAcrossPages() {
+    setSelectedIds(queue.map((i) => i.id));
+  }
+
+  function clearAllSelections() {
+    setSelectedIds([]);
+  }
+
   return (
     <SectionShell
       id="review-console"
@@ -189,6 +231,7 @@ export function ReviewConsolePanel({
       description="Approve or reject pain point findings"
     >
       <div className="space-y-4">
+        {/* Summary stat cards */}
         <div className="grid gap-4 md:grid-cols-4">
           <div className="card p-4">
             <p className="text-xs font-semibold text-slate-600 uppercase">Total</p>
@@ -214,32 +257,70 @@ export function ReviewConsolePanel({
           </div>
         ) : (
           <>
-            <div className="card p-6">
+            {/* Bulk action toolbar */}
+            <div className="card p-5">
+              <div className="flex flex-wrap items-center gap-3 mb-3">
+                {/* Select All (page) */}
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={allPageSelected}
+                    onChange={toggleSelectAll}
+                    className="h-4 w-4 rounded border-slate-300 accent-blue-600"
+                  />
+                  <span className="text-sm font-medium text-slate-700">
+                    Select all on page
+                  </span>
+                </label>
+
+                {/* Select all across all pages */}
+                {queue.length > PAGE_SIZE && (
+                  <button
+                    onClick={selectAllAcrossPages}
+                    className="text-xs text-blue-600 underline underline-offset-2 hover:text-blue-800"
+                  >
+                    Select all {queue.length} items
+                  </button>
+                )}
+
+                {selectedIds.length > 0 && (
+                  <button
+                    onClick={clearAllSelections}
+                    className="text-xs text-slate-500 underline underline-offset-2 hover:text-slate-700"
+                  >
+                    Clear selection
+                  </button>
+                )}
+
+                <span className="ml-auto text-sm text-slate-500">
+                  {selectedIds.length > 0
+                    ? `${selectedIds.length} selected`
+                    : "None selected"}
+                </span>
+              </div>
+
               <div className="flex flex-wrap gap-3 mb-4">
                 <button
                   onClick={() => handleBulkAction("approve")}
                   disabled={selectedIds.length === 0 || actionLoading}
                   className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Approve Selected
+                  ✓ Approve Selected ({selectedIds.length})
                 </button>
                 <button
                   onClick={() => handleBulkAction("reject")}
                   disabled={selectedIds.length === 0 || actionLoading}
                   className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Reject Selected
+                  ✕ Reject Selected ({selectedIds.length})
                 </button>
-                <span className="text-sm text-slate-600 self-center">
-                  {selectedIds.length} selected
-                </span>
               </div>
 
               <textarea
                 value={reviewerNotes}
                 onChange={(e) => setReviewerNotes(e.target.value)}
                 rows={2}
-                placeholder="Add notes for these decisions"
+                placeholder="Add reviewer notes for these decisions (optional)"
                 className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
 
@@ -247,8 +328,56 @@ export function ReviewConsolePanel({
               {statusMessage && <p className="mt-2 text-sm text-green-600">{statusMessage}</p>}
             </div>
 
+            {/* Pagination info + controls (top) */}
+            <div className="flex items-center justify-between px-1">
+              <p className="text-xs text-slate-500">
+                Showing {pageStart + 1}–{Math.min(pageEnd, queue.length)} of {queue.length} items
+              </p>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={safePage === 1}
+                  className="rounded border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 disabled:opacity-40 hover:bg-slate-50"
+                >
+                  ← Prev
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter((p) => Math.abs(p - safePage) <= 2 || p === 1 || p === totalPages)
+                  .reduce<(number | "…")[]>((acc, p, idx, arr) => {
+                    if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push("…");
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((p, idx) =>
+                    p === "…" ? (
+                      <span key={`ellipsis-${idx}`} className="px-1 text-xs text-slate-400">…</span>
+                    ) : (
+                      <button
+                        key={p}
+                        onClick={() => setCurrentPage(p as number)}
+                        className={`rounded border px-2.5 py-1 text-xs font-medium ${
+                          p === safePage
+                            ? "border-blue-500 bg-blue-600 text-white"
+                            : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    )
+                  )}
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={safePage === totalPages}
+                  className="rounded border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 disabled:opacity-40 hover:bg-slate-50"
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
+
+            {/* Review items list (current page only) */}
             <div className="space-y-3">
-              {queue.map((item) => {
+              {pageItems.map((item) => {
                 const isSelected = selectedIdSet.has(item.id);
                 const sourceName = getSourceName(item);
                 const decision = item.reviewer_decision ?? item.review_status;
@@ -267,11 +396,11 @@ export function ReviewConsolePanel({
                         checked={isSelected}
                         onChange={() => toggleSelection(item.id)}
                         onClick={(e) => e.stopPropagation()}
-                        className="mt-1"
+                        className="mt-1 h-4 w-4 rounded border-slate-300 accent-blue-600"
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-semibold text-slate-900">#{item.id}</p>
+                          <p className="font-semibold text-slate-900 text-sm">#{item.id}</p>
                           <span className="status-pill info">{humanize(sourceName)}</span>
                           <span
                             className={`status-pill ${
@@ -295,6 +424,30 @@ export function ReviewConsolePanel({
               })}
             </div>
 
+            {/* Pagination controls (bottom) */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2 pt-2">
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={safePage === 1}
+                  className="rounded border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 disabled:opacity-40 hover:bg-slate-50"
+                >
+                  ← Previous page
+                </button>
+                <span className="text-xs text-slate-500">
+                  Page {safePage} of {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={safePage === totalPages}
+                  className="rounded border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 disabled:opacity-40 hover:bg-slate-50"
+                >
+                  Next page →
+                </button>
+              </div>
+            )}
+
+            {/* Detail panel for selected item */}
             {selectedItem && (
               <div className="card p-6 bg-blue-50">
                 <h3 className="font-semibold text-slate-900 mb-4">Details: Item #{selectedItem.id}</h3>

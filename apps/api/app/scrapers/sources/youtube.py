@@ -1,5 +1,11 @@
 """
-YouTube scraper — 3-tier strategy:
+YouTube scraper — 3-tier strategy + sentiment filtering:
+
+Enhancements:
+  - Source platform tagged as "youtube" + channel in metadata
+  - Sentiment filter: skip videos that are purely positive (no negative signal)
+  - pain_point_summary extracted from title + description
+
 
 Tier 1: YouTube Data API v3 (official, free 10k units/day, always works)
          Requires YOUTUBE_DATA_API_KEY in .env
@@ -25,6 +31,34 @@ from app.scrapers.utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+NEGATIVE_SIGNAL_KEYWORDS = [
+    "worst", "terrible", "horrible", "awful", "very bad", "not good",
+    "slow", "crash", "bug", "glitch", "fraud", "scam", "cheat", "fake",
+    "mislead", "spam", "disappoint", "frustrat", "annoying", "useless",
+    "waste", "hidden charge", "hidden fee", "overpriced", "not working",
+    "doesn't work", "didn't work", "broken", "no response", "not respond",
+    "ignore", "no reply", "stale", "wrong", "incorrect", "inaccurate",
+    "aggressive", "haras", "refund", "complain", "complaint", "unverified",
+    "money lost", "lost money", "no support", "poor support", "bad support",
+    "fake listing", "already sold", "not available", "beware", "warning",
+    "alert", "scammed", "cheated", "ripped off", "problem", "issue", "error",
+    "review", "honest", "reality", "truth", "exposed", "dark side",
+]
+
+
+def _has_negative_signal(text: str) -> bool:
+    text_lower = text.lower()
+    return any(kw in text_lower for kw in NEGATIVE_SIGNAL_KEYWORDS)
+
+
+def _make_pain_point_summary(text: str, max_chars: int = 140) -> str:
+    text = text.strip()
+    for sep in [".", "!", "?", "\n"]:
+        idx = text.find(sep)
+        if 20 <= idx <= max_chars:
+            return text[: idx + 1].strip()
+    return text[:max_chars].rstrip() + ("…" if len(text) > max_chars else "")
 
 
 class YouTubeScraper(BaseSourceScraper):
@@ -99,6 +133,10 @@ class YouTubeScraper(BaseSourceScraper):
             if not combined:
                 continue
 
+            # Sentiment filter — skip purely positive videos
+            if not _has_negative_signal(combined):
+                continue
+
             source_url = f"https://www.youtube.com/watch?v={video_id}" if video_id else None
             ext_id = f"yt-{video_id}" if video_id else None
 
@@ -110,6 +148,8 @@ class YouTubeScraper(BaseSourceScraper):
                     )
                 except ValueError:
                     pass
+
+            pain_summary = _make_pain_point_summary(combined)
 
             items.append(ScrapedItem(
                 source_name=self.source_name,
@@ -139,10 +179,12 @@ class YouTubeScraper(BaseSourceScraper):
                 cleaned_text=combined,
                 language="en",
                 metadata_json={
+                    "platform": "youtube",
                     "video_id": video_id,
                     "fetch_mode": "youtube_data_api_v3",
                     "search_query": search_q,
                     "channel": channel,
+                    "pain_point_summary": pain_summary,
                 },
             ))
 
@@ -220,7 +262,12 @@ class YouTubeScraper(BaseSourceScraper):
             if not combined:
                 continue
 
+            # Sentiment filter
+            if not _has_negative_signal(combined):
+                continue
+
             ext_id = f"yt-{video_id}" if video_id else None
+            ytdlp_pain_summary = _make_pain_point_summary(combined)
 
             items.append(ScrapedItem(
                 source_name=self.source_name,
@@ -249,10 +296,12 @@ class YouTubeScraper(BaseSourceScraper):
                 cleaned_text=combined,
                 language="en",
                 metadata_json={
+                    "platform": "youtube",
                     "video_id": video_id,
                     "fetch_mode": "ytdlp_search",
                     "search_query": search_query,
                     "view_count": entry.get("view_count"),
+                    "pain_point_summary": ytdlp_pain_summary,
                 },
             ))
 
@@ -298,6 +347,7 @@ class YouTubeScraper(BaseSourceScraper):
             ext_id = f"youtube-{brand_slug}-{video_id}"
             source_url = f"https://youtube.com/watch?v={video_id}"
             combined = f"{title}\n\n{description}"
+            stub_pain_summary = _make_pain_point_summary(combined)
             items.append(ScrapedItem(
                 source_name=self.source_name,
                 platform_name=target_brand,
@@ -320,8 +370,10 @@ class YouTubeScraper(BaseSourceScraper):
                 cleaned_text=combined,
                 language="en",
                 metadata_json={
+                    "platform": "youtube",
                     "fetch_mode": "stub",
                     "fallback_reason": fallback_reason,
+                    "pain_point_summary": stub_pain_summary,
                 },
             ))
         return items

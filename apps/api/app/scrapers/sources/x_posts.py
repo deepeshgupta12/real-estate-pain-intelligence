@@ -6,6 +6,34 @@ from app.scrapers.http_client import RetryingHttpClient
 from app.scrapers.types import ScrapedItem
 from app.scrapers.utils import build_dedupe_key, build_payload_snapshot, normalize_whitespace
 
+NEGATIVE_SIGNAL_KEYWORDS = [
+    "worst", "terrible", "horrible", "awful", "very bad", "not good",
+    "slow", "crash", "bug", "glitch", "fraud", "scam", "cheat", "fake",
+    "mislead", "spam", "disappoint", "frustrat", "annoying", "useless",
+    "waste", "hidden charge", "overpriced", "not working",
+    "doesn't work", "didn't work", "broken", "no response", "not respond",
+    "ignore", "stale", "wrong", "incorrect", "inaccurate", "aggressive",
+    "haras", "refund", "complain", "complaint", "unverified",
+    "money lost", "lost money", "no support", "poor support", "bad support",
+    "fake listing", "already sold", "not available", "beware", "warning",
+    "alert", "scammed", "cheated", "ripped off", "problem", "issue", "error",
+    "blocking", "spam call", "duplicate listing", "token",
+]
+
+
+def _has_negative_signal(text: str) -> bool:
+    text_lower = text.lower()
+    return any(kw in text_lower for kw in NEGATIVE_SIGNAL_KEYWORDS)
+
+
+def _make_pain_point_summary(text: str, max_chars: int = 140) -> str:
+    text = text.strip()
+    for sep in [".", "!", "?", "\n"]:
+        idx = text.find(sep)
+        if 20 <= idx <= max_chars:
+            return text[: idx + 1].strip()
+    return text[:max_chars].rstrip() + ("…" if len(text) > max_chars else "")
+
 
 class XPostsScraper(BaseSourceScraper):
     source_name = "x"
@@ -48,6 +76,10 @@ class XPostsScraper(BaseSourceScraper):
             if not raw_text:
                 continue
 
+            # Sentiment filter — skip purely positive posts
+            if not _has_negative_signal(raw_text):
+                continue
+
             source_url = hit.get("url") or hit.get("story_url")
             author_name = hit.get("author")
 
@@ -55,6 +87,8 @@ class XPostsScraper(BaseSourceScraper):
             created_at = hit.get("created_at")
             if created_at:
                 published_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+
+            pain_summary = _make_pain_point_summary(raw_text)
 
             parsed_items.append(
                 ScrapedItem(
@@ -87,10 +121,12 @@ class XPostsScraper(BaseSourceScraper):
                     cleaned_text=raw_text,
                     language="en",
                     metadata_json={
+                        "platform": "x_twitter",
                         "network": "hn_algolia_fallback",
                         "points": hit.get("points"),
                         "num_comments": hit.get("num_comments"),
                         "fetch_mode": "live",
+                        "pain_point_summary": pain_summary,
                     },
                 )
             )
@@ -119,6 +155,7 @@ class XPostsScraper(BaseSourceScraper):
         for ext_suffix, author, text in stubs:
             ext_id = f"{brand_slug}-{ext_suffix}"
             source_url = f"https://x.com/{author}/status/{ext_suffix}"
+            pain_summary = _make_pain_point_summary(text)
             items.append(ScrapedItem(
                 source_name=self.source_name,
                 platform_name=target_brand,
@@ -141,9 +178,11 @@ class XPostsScraper(BaseSourceScraper):
                 cleaned_text=text,
                 language="en",
                 metadata_json={
+                    "platform": "x_twitter",
                     "network": "public_social_discussion",
                     "fetch_mode": "stub",
                     "fallback_reason": fallback_reason,
+                    "pain_point_summary": pain_summary,
                 },
             ))
         return items

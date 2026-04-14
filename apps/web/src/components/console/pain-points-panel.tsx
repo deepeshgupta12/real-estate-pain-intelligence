@@ -132,6 +132,41 @@ export function PainPointsPanel({ runId }: PainPointsPanelProps) {
 
       {deduped.length > 0 && (
         <>
+          {/* Per-source summary chips */}
+          {(() => {
+            const sourceMap: Record<string, number> = {};
+            for (const i of deduped) {
+              const src = (i.source_name ?? "unknown");
+              sourceMap[src] = (sourceMap[src] ?? 0) + 1;
+            }
+            const SOURCE_COLORS: Record<string, string> = {
+              reddit:       "border-orange-200 bg-orange-50 text-orange-700",
+              youtube:      "border-red-200 bg-red-50 text-red-700",
+              app_reviews:  "border-purple-200 bg-purple-50 text-purple-700",
+              review_sites: "border-indigo-200 bg-indigo-50 text-indigo-700",
+              x:            "border-sky-200 bg-sky-50 text-sky-700",
+            };
+            const SOURCE_ICONS: Record<string, string> = {
+              reddit: "📋", youtube: "🎬", app_reviews: "📱",
+              review_sites: "⭐", x: "𝕏",
+            };
+            return (
+              <div className="mt-4 flex flex-wrap gap-2">
+                <span className="self-center text-xs font-semibold text-slate-500 uppercase tracking-wide mr-1">Sources:</span>
+                {Object.entries(sourceMap).map(([src, count]) => (
+                  <span
+                    key={src}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${SOURCE_COLORS[src] ?? "border-slate-200 bg-slate-50 text-slate-700"}`}
+                  >
+                    <span>{SOURCE_ICONS[src] ?? "📄"}</span>
+                    {humanizeLabel(src)}
+                    <span className="ml-1 rounded-full bg-white/60 px-1.5 py-0.5 text-[10px] font-bold">{count}</span>
+                  </span>
+                ))}
+              </div>
+            );
+          })()}
+
           {/* Priority summary bar */}
           <div className="mt-5 flex flex-wrap gap-3">
             <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2">

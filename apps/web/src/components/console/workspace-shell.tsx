@@ -481,29 +481,6 @@ export function WorkspaceShell({
 
           <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <OverviewStatCard
-              label="Application"
-              value={appName}
-              helper="Frontend workspace supports both operation and monitoring."
-            />
-            <OverviewStatCard
-              label="Environment"
-              value={environment}
-              helper="Pulled directly from backend meta settings."
-            />
-            <OverviewStatCard
-              label="API Prefix"
-              value={apiPrefix}
-              helper="Base route used across run actions and monitoring calls."
-            />
-            <OverviewStatCard
-              label="Current build"
-              value="v0.2 — Step 32"
-              helper="Production-grade: background tasks, JWT auth, topic modeling, 5-agent orchestration."
-            />
-          </section>
-
-          <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <OverviewStatCard
               label="Total runs"
               value={hardeningOverview?.runs_total ?? 0}
               helper="All created runs visible to the workspace."
