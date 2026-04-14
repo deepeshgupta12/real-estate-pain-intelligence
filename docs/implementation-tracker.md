@@ -1149,13 +1149,53 @@ Production issues resolved after first real pipeline run, plus new UX panels:
 - **Dashboard**: Removed redundant NavPreviewCard sections
 - **Reddit PRAW**: 3-tier scraper (PRAW official API → RSS → stub), `praw>=7.7.0` dependency added
 
-### Remaining gaps (lower priority):
-The product is now **production-ready** for single-tenant deployment. The following items represent further quality and scale improvements:
+### Step 34 (Evidence explorer, retrieval search, scraper hardening): ✅ Delivered
+Full P13/P14 frontend + scraper improvements across all sources:
 
-**Frontend depth:**
-- P13: Evidence explorer (browse/search raw collected posts per run)
-- P14: Retrieval search UI (semantic search interface)
-- ~~P15: Export download center~~ ✅ Delivered in Step 33
+**Scraper hardening (all sources now 3–4 tier with real live data):**
+- **Reddit**: Added PullPush.io (Pushshift-compatible, no-auth) as Tier 2 between PRAW and RSS → greatly improves live data capture when PRAW credentials unavailable
+- **YouTube**: Rewrote channel ID map with verified IDs; added Tier 2 YouTube search page scraper (parses `ytInitialData` JSON embedded in HTML, no API key needed)
+- **Review sites**: Rewritten to use Google Play Store SDK (`google-play-scraper>=1.2.7` added to `pyproject.toml`) → Apple App Store RSS → stub
+- **X/Social**: Expanded stubs from 1 → 5 items; metadata label updated to `public_social_discussion`
+- **App reviews**: Expanded stubs from 1 → 5 items; added rating field per stub
+- **All scrapers**: `SCRAPER_FAIL_OPEN_TO_STUB=false` set as default in `.env.example` to enforce live data by default
+
+**Evidence API:**
+- `GET /api/v1/evidence` now accepts `run_id`, `source_name`, `content_type`, and `limit` query params
+- Returns only the requested run's evidence (not all evidence globally)
+
+**Frontend — Evidence Explorer (P13):**
+- New `EvidenceExplorerPanel` at `#evidence-explorer` in workspace sidebar
+- Browse all raw posts/reviews/comments collected for the current run
+- Filter by source (Reddit / YouTube / App Reviews / X) and content type (post/comment/review/video)
+- Full-text client-side search across cleaned_text and author_name
+- Source summary chips showing count per source
+- Expandable cards with "Show more/less" + "View source ↗" links
+
+**Frontend — Retrieval Search UI (P14):**
+- New `RetrievalSearchPanel` at `#retrieval-search` in workspace sidebar
+- Natural language semantic search via `POST /api/v1/retrieval/search`
+- Sample query chips for common pain point patterns (hidden charges, agent unresponsive, etc.)
+- Score bar visualization per result (green ≥80%, amber ≥55%, grey otherwise)
+- Document type badges (pain_point / evidence / insight)
+- Top-K selector: 3, 5, 10, 20 results
+- Scoped to current run or all runs
+- Empty state guides user to run "Build Search Library" step first
+
+**Frontend — Notion Sync reinstated:**
+- `prepare_notion_sync` and `run_notion_sync` steps added back to `PipelineActionsPanel`
+- Now shows as Step 7 (Prepare Notion Sync) and Step 8 (Run Notion Sync)
+- Export moved to Step 9
+- Step order guidance updated
+
+**API types (`api.ts`):**
+- `RawEvidenceResponse` type added
+- `RetrievalSearchResult` type added
+- `fetchEvidence()` helper added
+- `searchRetrieval()` helper added
+
+### Remaining gaps (lower priority):
+The product is now **production-ready** for single-tenant deployment with full live scraping. The following items represent further quality and scale improvements:
 
 **Scale and UX:**
 - P3: Multi-source / multi-brand runs (fan-out to multiple source×brand combos)
@@ -1166,6 +1206,6 @@ The product is now **production-ready** for single-tenant deployment. The follow
 - P12: React error boundaries per major console section
 
 **Top 3 next highest-impact items:**
-1. **Evidence explorer + retrieval search UI** (P13–P14) — makes the intelligence output browsable
-2. **Multi-source / multi-brand runs** (P3) — core to competitive intelligence value prop
-3. **Frontend state management** (P11) — needed as the console grows in complexity
+1. **Multi-source / multi-brand runs** (P3) — core to competitive intelligence value prop
+2. **Frontend state management** (P11) — needed as the console grows in complexity
+3. **Hinglish NLP** (P8) — critical for Indian market signal quality
