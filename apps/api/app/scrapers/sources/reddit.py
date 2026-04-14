@@ -206,7 +206,101 @@ class RedditScraper(BaseSourceScraper):
             return []
 
     # ------------------------------------------------------------------
-    # Tier 2: RSS feed (no auth, fallback)
+    # ------------------------------------------------------------------
+    # Tier 2: PullPush.io — Pushshift-compatible Reddit archive (no auth)
+    # ------------------------------------------------------------------
+
+    def _scrape_via_pullpush(self, target_brand: str) -> list[ScrapedItem]:
+        """
+        PullPush.io (https://pullpush.io) is a community-run Reddit data service
+        that indexes public posts. No authentication required.
+        """
+        settings = get_settings()
+        fetched_at = datetime.now(timezone.utc)
+        source_query = self._build_query(target_brand)
+
+        try:
+            payload = RetryingHttpClient.get_json(
+                "https://api.pullpush.io/reddit/search/submission/",
+                params={
+                    "q": target_brand,
+                    "sort": "desc",
+                    "sort_type": "created_utc",
+                    "size": settings.scraper_max_items_per_source,
+                    "subreddit": ",".join(INDIA_REALESTATE_SUBREDDITS[:4]),
+                },
+                headers={"User-Agent": settings.scraper_user_agent},
+                use_browser_headers=False,
+            )
+
+            hits = payload.get("data") or []
+            items: list[ScrapedItem] = []
+
+            for post in hits:
+                title = (post.get("title") or "").strip()
+                body = (post.get("selftext") or "").strip()
+                if body in ("[removed]", "[deleted]", ""):
+                    body = ""
+                combined = "\n\n".join(p for p in [title, body] if p).strip()
+                if not combined:
+                    continue
+
+                post_id = post.get("id") or ""
+                subreddit = post.get("subreddit") or ""
+                author = post.get("author") or None
+                created_utc = post.get("created_utc")
+                source_url = f"https://reddit.com/r/{subreddit}/comments/{post_id}/"
+                published_at = None
+                if created_utc:
+                    try:
+                        published_at = datetime.fromtimestamp(float(created_utc), tz=timezone.utc)
+                    except Exception:
+                        pass
+
+                items.append(ScrapedItem(
+                    source_name=self.source_name,
+                    platform_name=target_brand,
+                    content_type="post",
+                    external_id=post_id,
+                    author_name=author,
+                    source_url=source_url,
+                    published_at=published_at,
+                    fetched_at=fetched_at,
+                    source_query=source_query,
+                    parser_version="reddit-pullpush-v1",
+                    dedupe_key=build_dedupe_key(
+                        source_name=self.source_name,
+                        external_id=post_id,
+                        source_url=source_url,
+                        raw_text=combined,
+                    ),
+                    raw_payload_json=build_payload_snapshot({
+                        "title": title,
+                        "body": body,
+                        "score": post.get("score"),
+                        "num_comments": post.get("num_comments"),
+                        "subreddit": subreddit,
+                    }),
+                    raw_text=combined,
+                    cleaned_text=combined,
+                    language="en",
+                    metadata_json={
+                        "subreddit": subreddit,
+                        "score": post.get("score"),
+                        "num_comments": post.get("num_comments"),
+                        "fetch_mode": "pullpush",
+                    },
+                ))
+
+            logger.info("PullPush: fetched %d items for '%s'", len(items), target_brand)
+            return items
+
+        except Exception as exc:
+            logger.warning("PullPush scrape failed for '%s': %s", target_brand, exc)
+            return []
+
+    # ------------------------------------------------------------------
+    # Tier 3: RSS feed (no auth, original fallback)
     # ------------------------------------------------------------------
 
     def _build_rss_url(self) -> str:
@@ -370,9 +464,15 @@ class RedditScraper(BaseSourceScraper):
             items = self._scrape_via_praw(target_brand)
             if items:
                 return items
-            logger.warning("Reddit PRAW returned 0 items, falling back to RSS")
+            logger.warning("Reddit PRAW returned 0 items, trying PullPush fallback")
 
-        # Tier 2: RSS feed
+        # Tier 2: PullPush.io (Pushshift-compatible, no auth required)
+        items = self._scrape_via_pullpush(target_brand)
+        if items:
+            return items
+        logger.warning("Reddit PullPush returned 0 items, trying RSS fallback")
+
+        # Tier 3: Reddit RSS feed
         try:
             xml_text = self._fetch_rss_payload(target_brand)
             items = self._parse_rss_feed(xml_text, target_brand)
@@ -383,9 +483,10 @@ class RedditScraper(BaseSourceScraper):
         except Exception as exc:
             logger.warning("Reddit RSS failed: %s", exc)
 
-        # Tier 3: Stub
+        # Tier 4: Stub (only when explicitly enabled)
         if settings.scraper_fail_open_to_stub:
             logger.info("Reddit: falling back to stub data")
             return self._build_stub_items(target_brand, "All live tiers failed")
 
+        logger.warning("Reddit: all live tiers failed for '%s', no stub fallback enabled", target_brand)
         return []

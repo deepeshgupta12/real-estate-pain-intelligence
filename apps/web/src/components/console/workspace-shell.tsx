@@ -19,6 +19,8 @@ import { RunEventsPanel } from "@/components/console/run-events-panel";
 import { RunSetupPanel } from "@/components/console/run-setup-panel";
 import { ExportsPanel } from "@/components/console/exports-panel";
 import { PainPointsPanel } from "@/components/console/pain-points-panel";
+import { EvidenceExplorerPanel } from "@/components/console/evidence-explorer-panel";
+import { RetrievalSearchPanel } from "@/components/console/retrieval-search-panel";
 import {
   createScrapeRun,
   dispatchRun,
@@ -142,6 +144,20 @@ const navigationItems: NavigationItem[] = [
     description: "Full timeline of events for this session.",
     badge: "Live",
     href: "#run-events",
+  },
+  {
+    id: "evidence-explorer",
+    label: "Evidence Explorer",
+    description: "Browse all raw posts, reviews, and comments collected.",
+    badge: "Live",
+    href: "#evidence-explorer",
+  },
+  {
+    id: "retrieval-search",
+    label: "Semantic Search",
+    description: "Search the indexed knowledge base with natural language.",
+    badge: "Search",
+    href: "#retrieval-search",
   },
   {
     id: "review-console",
@@ -627,6 +643,10 @@ export function WorkspaceShell({
             />
 
             <ExportsPanel runId={currentRunId} triggerRefresh={exportRefreshKey} />
+
+            <EvidenceExplorerPanel runId={currentRunId} />
+
+            <RetrievalSearchPanel runId={currentRunId} />
 
             <QueueHealthPanel queueItems={queueHealth} />
 

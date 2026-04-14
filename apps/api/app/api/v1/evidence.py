@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -71,10 +73,22 @@ def create_raw_evidence(
 
 
 @router.get("", response_model=list[RawEvidenceResponse])
-def list_raw_evidence(db: Session = Depends(get_db)) -> list[RawEvidence]:
-    evidence_items = db.scalars(
-        select(RawEvidence).order_by(RawEvidence.id.desc())
-    ).all()
+def list_raw_evidence(
+    run_id: Optional[int] = Query(default=None, description="Filter by scrape run ID"),
+    source_name: Optional[str] = Query(default=None, description="Filter by source name"),
+    content_type: Optional[str] = Query(default=None, description="Filter by content type"),
+    limit: int = Query(default=100, le=500, description="Maximum number of results"),
+    db: Session = Depends(get_db),
+) -> list[RawEvidence]:
+    stmt = select(RawEvidence).order_by(RawEvidence.id.desc())
+    if run_id is not None:
+        stmt = stmt.where(RawEvidence.scrape_run_id == run_id)
+    if source_name is not None:
+        stmt = stmt.where(RawEvidence.source_name == source_name)
+    if content_type is not None:
+        stmt = stmt.where(RawEvidence.content_type == content_type)
+    stmt = stmt.limit(limit)
+    evidence_items = db.scalars(stmt).all()
 
     updated = False
     for evidence in evidence_items:

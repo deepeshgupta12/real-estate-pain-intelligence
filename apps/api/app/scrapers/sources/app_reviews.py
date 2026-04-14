@@ -133,16 +133,30 @@ class AppReviewsScraper(BaseSourceScraper):
     def _build_stub_items(self, target_brand: str, fallback_reason: str | None = None) -> list[ScrapedItem]:
         fetched_at = datetime.now(timezone.utc)
         source_query = self._build_query(target_brand)
-        stub_text = f"The {target_brand} app feels slow and the leads shown do not match intent."
-        external_id = f"app-review-{target_brand.lower().replace(' ', '-')}-001"
+        brand_slug = target_brand.lower().replace(" ", "-")
 
-        return [
-            ScrapedItem(
+        stubs = [
+            ("app-stub-001", 2, "app_user_1",
+             f"The {target_brand} app feels very slow and the property leads shown don't match my budget intent at all."),
+            ("app-stub-002", 1, "app_user_2",
+             f"{target_brand} app crashes on Android when switching between listings. Very annoying, lost interest 3 times."),
+            ("app-stub-003", 3, "app_user_3",
+             f"Good property selection on {target_brand} but the in-app chat with agents never works. Always shows error."),
+            ("app-stub-004", 2, "app_user_4",
+             f"Notifications from {target_brand} are spammy. I get 10+ alerts daily for properties I have no interest in. Can't turn them off."),
+            ("app-stub-005", 1, "app_user_5",
+             f"The {target_brand} search filter resets every time I leave the app. I have to set city, budget and BHK again and again. Frustrating UX."),
+        ]
+
+        items = []
+        for ext_suffix, rating, author, text in stubs:
+            ext_id = f"{brand_slug}-{ext_suffix}"
+            items.append(ScrapedItem(
                 source_name=self.source_name,
                 platform_name=target_brand,
                 content_type="review",
-                external_id=external_id,
-                author_name="app_user_1",
+                external_id=ext_id,
+                author_name=author,
                 source_url=None,
                 published_at=None,
                 fetched_at=fetched_at,
@@ -150,21 +164,22 @@ class AppReviewsScraper(BaseSourceScraper):
                 parser_version=f"{self.parser_version}-stub",
                 dedupe_key=build_dedupe_key(
                     source_name=self.source_name,
-                    external_id=external_id,
+                    external_id=ext_id,
                     source_url=None,
-                    raw_text=stub_text,
+                    raw_text=text,
                 ),
-                raw_payload_json={"stub": True, "reason": fallback_reason},
-                raw_text=stub_text,
-                cleaned_text=stub_text,
+                raw_payload_json={"stub": True, "reason": fallback_reason, "rating": rating},
+                raw_text=text,
+                cleaned_text=text,
                 language="en",
                 metadata_json={
-                    "store": "google_play",
+                    "store": "app_store",
+                    "rating": str(rating),
                     "fetch_mode": "stub",
                     "fallback_reason": fallback_reason,
                 },
-            )
-        ]
+            ))
+        return items
 
     def scrape(self, target_brand: str) -> list[ScrapedItem]:
         settings = get_settings()

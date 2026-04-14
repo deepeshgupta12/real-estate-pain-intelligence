@@ -61,12 +61,24 @@ const steps: Array<{
   {
     key: "create_review_list",
     title: "Step 6: Build Queue",
-    description: "Prepare review items",
+    description: "Prepare review items for human review",
     buttonLabel: "Run Now →",
   },
   {
+    key: "prepare_notion_sync",
+    title: "Step 7: Prepare Notion Sync",
+    description: "Generate Notion sync jobs for approved insights",
+    buttonLabel: "Run Now →",
+  },
+  {
+    key: "run_notion_sync",
+    title: "Step 8: Run Notion Sync",
+    description: "Push approved pain points into your Notion workspace",
+    buttonLabel: "Sync Now →",
+  },
+  {
     key: "create_exports",
-    title: "Step 7: Export",
+    title: "Step 9: Export",
     description: "Download results as CSV, JSON, PDF",
     buttonLabel: "Download",
   },
@@ -124,8 +136,8 @@ export function PipelineActionsPanel({
 
       {/* Step order guidance */}
       <div className="mt-4 rounded-lg bg-slate-50 border border-slate-200 p-4 text-sm text-slate-600">
-        <span className="font-semibold text-slate-700">Run steps in order:</span> Step 1 → 2 → 3 → 4 → 5 → 6 → 7.
-        Each step requires the previous one to have completed successfully.
+        <span className="font-semibold text-slate-700">Run steps in order:</span> Step 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9.
+        Each step requires the previous one to have completed successfully. Notion Sync (Steps 7–8) requires a valid Notion API key in the backend settings.
       </div>
 
       {!currentRunId && (

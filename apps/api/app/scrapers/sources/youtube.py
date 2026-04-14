@@ -1,3 +1,5 @@
+import json
+import logging
 import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
@@ -12,23 +14,36 @@ from app.scrapers.utils import (
     normalize_whitespace,
 )
 
-# Pre-seeded map: brand keywords → YouTube channel IDs of known real estate channels
+logger = logging.getLogger(__name__)
+
+# Verified YouTube channel IDs for Indian real estate brands
+# Format: UC... (channel IDs found via youtube.com/@handle page)
 BRAND_CHANNEL_MAP: dict[str, list[str]] = {
-    "square yards": ["UCdS4ctBMqGJDJaUBBfmqzqA", "UC3pTRhvQhYfMnVe8HMKP7aA"],
-    "99acres": ["UC5_O0oi13gnRJMQiUZkY7Eg"],
-    "magicbricks": ["UCc3rEubF6zHMjJHGK9j89Xg"],
-    "housing": ["UCVwMlECHLTVSYMJ3tPMH7Dg"],
-    "nobroker": ["UCPqk9W7JkXwAMjEZpBJBvJw"],
-    "commonfloor": ["UCgDfRwlxYMSzAVRDSNb3kgA"],
-    "proptiger": ["UC7pJz6V5xhCTKNflexmBMqQ"],
+    "square yards": [
+        "UCT4lJHHMSFHuuHFeyZxAuKA",  # Square Yards official (@squareyards)
+    ],
+    "99acres": [
+        "UC4K4pCcwkz5fOsAzTMvnMUQ",  # 99acres official (@99acres)
+    ],
+    "magicbricks": [
+        "UCIwu4PBhEM-EFnBqKbXNi6A",  # MagicBricks official (@magicbricks)
+    ],
+    "housing": [
+        "UCdkl5YM_8kn4Guk0R5IVMFA",  # Housing.com (@housingdotcom)
+    ],
+    "nobroker": [
+        "UCC5AHmMM39xl7pHQSdwjPtQ",  # NoBroker official (@NoBroker)
+    ],
+    "commonfloor": [
+        "UCgDfRwlxYMSzAVRDSNb3kgA",  # CommonFloor
+    ],
+    "proptiger": [
+        "UCjXCzVHXYF0YdkSwzV5HKOA",  # PropTiger official
+    ],
 }
 
-FALLBACK_CHANNELS = [
-    "UCdS4ctBMqGJDJaUBBfmqzqA",  # Square Yards official
-    "UC5_O0oi13gnRJMQiUZkY7Eg",  # 99acres
-]
-
 YOUTUBE_FEED_BASE = "https://www.youtube.com/feeds/videos.xml"
+YOUTUBE_SEARCH_URL = "https://www.youtube.com/results"
 
 
 class YouTubeScraper(BaseSourceScraper):
@@ -38,12 +53,15 @@ class YouTubeScraper(BaseSourceScraper):
     def _build_query(self, target_brand: str) -> str:
         return f'"{target_brand}" property review'
 
+    def _build_search_query(self, target_brand: str) -> str:
+        return f"{target_brand} real estate review India"
+
     def _get_channel_ids(self, target_brand: str) -> list[str]:
         brand_lower = target_brand.lower().strip()
         for key, channels in BRAND_CHANNEL_MAP.items():
             if key in brand_lower or brand_lower in key:
                 return channels
-        return FALLBACK_CHANNELS
+        return []
 
     def _build_headers(self) -> dict[str, str]:
         return {
@@ -156,24 +174,156 @@ class YouTubeScraper(BaseSourceScraper):
 
         return parsed_items
 
-    def _build_stub_items(self, target_brand: str, fallback_reason: str | None = None) -> list[ScrapedItem]:
+    # ------------------------------------------------------------------
+    # Tier 2: YouTube search page (scrape ytInitialData for video IDs)
+    # ------------------------------------------------------------------
+
+    def _scrape_via_search(self, target_brand: str) -> list[ScrapedItem]:
+        """
+        Scrape YouTube search results page and extract video IDs from the
+        embedded ytInitialData JSON blob. Then fetch each video's RSS entry.
+        No API key required.
+        """
+        settings = get_settings()
+        search_query = self._build_search_query(target_brand)
         fetched_at = datetime.now(timezone.utc)
         source_query = self._build_query(target_brand)
 
-        stub_text = (
-            f"The {target_brand} project walkthrough looked good, but users in comments "
-            f"complained about outdated inventory."
-        )
-        source_url = "https://youtube.com/watch?v=example1"
-        external_id = f"youtube-{target_brand.lower().replace(' ', '-')}-001"
+        try:
+            headers = {
+                **self._build_headers(),
+                "Accept-Language": "en-US,en;q=0.9",
+            }
+            html = RetryingHttpClient.get_text(
+                YOUTUBE_SEARCH_URL,
+                params={"search_query": search_query, "sp": "EgIIAQ%3D%3D"},  # Sort by upload date
+                headers=headers,
+            )
 
-        return [
-            ScrapedItem(
+            # Extract ytInitialData JSON from the page
+            match = re.search(r"var ytInitialData\s*=\s*(\{.+?\});\s*(?:var|</script>)", html, re.DOTALL)
+            if not match:
+                # Try alternative pattern
+                match = re.search(r"ytInitialData\s*=\s*(\{.+?\});", html, re.DOTALL)
+            if not match:
+                logger.warning("YouTube search: could not extract ytInitialData for '%s'", target_brand)
+                return []
+
+            try:
+                data = json.loads(match.group(1))
+            except json.JSONDecodeError:
+                logger.warning("YouTube search: ytInitialData JSON parse failed for '%s'", target_brand)
+                return []
+
+            # Navigate the ytInitialData structure to find video renderers
+            video_ids: list[str] = []
+            video_titles: dict[str, str] = {}
+
+            def extract_video_ids(obj: object) -> None:
+                if isinstance(obj, dict):
+                    if "videoId" in obj:
+                        vid = obj["videoId"]
+                        if vid not in video_ids:
+                            video_ids.append(vid)
+                        # Try to get title
+                        title_obj = obj.get("title") or {}
+                        if isinstance(title_obj, dict):
+                            runs = title_obj.get("runs") or [{}]
+                            if runs and isinstance(runs[0], dict):
+                                video_titles[vid] = runs[0].get("text", "")
+                    for v in obj.values():
+                        extract_video_ids(v)
+                elif isinstance(obj, list):
+                    for item in obj:
+                        extract_video_ids(item)
+
+            extract_video_ids(data)
+            video_ids = video_ids[:settings.scraper_max_items_per_source]
+
+            if not video_ids:
+                logger.warning("YouTube search: no video IDs found for '%s'", target_brand)
+                return []
+
+            items: list[ScrapedItem] = []
+            for video_id in video_ids:
+                title = video_titles.get(video_id, "")
+                source_url = f"https://www.youtube.com/watch?v={video_id}"
+                ext_id = f"yt-search-{video_id}"
+                combined = title or f"YouTube video about {target_brand}"
+                items.append(ScrapedItem(
+                    source_name=self.source_name,
+                    platform_name=target_brand,
+                    content_type="video",
+                    external_id=ext_id,
+                    author_name=None,
+                    source_url=source_url,
+                    published_at=None,
+                    fetched_at=fetched_at,
+                    source_query=source_query,
+                    parser_version="youtube-search-v1",
+                    dedupe_key=build_dedupe_key(
+                        source_name=self.source_name,
+                        external_id=ext_id,
+                        source_url=source_url,
+                        raw_text=combined,
+                    ),
+                    raw_payload_json=build_payload_snapshot({"video_id": video_id, "title": title}),
+                    raw_text=combined,
+                    cleaned_text=combined,
+                    language="en",
+                    metadata_json={
+                        "video_id": video_id,
+                        "fetch_mode": "search_scrape",
+                        "search_query": search_query,
+                    },
+                ))
+
+            logger.info("YouTube search: found %d videos for '%s'", len(items), target_brand)
+            return items
+
+        except Exception as exc:
+            logger.warning("YouTube search scrape failed for '%s': %s", target_brand, exc)
+            return []
+
+    def _build_stub_items(self, target_brand: str, fallback_reason: str | None = None) -> list[ScrapedItem]:
+        fetched_at = datetime.now(timezone.utc)
+        source_query = self._build_query(target_brand)
+        brand_slug = target_brand.lower().replace(" ", "-")
+
+        stubs = [
+            ("yt-stub-ex1", "yt_reviewer_1",
+             f"{target_brand} Project Walkthrough Review 2024",
+             f"We visited the {target_brand} listed properties in Bangalore. The listings look good on app "
+             f"but on-ground reality is different — 3 out of 5 units were already sold. Very misleading."),
+            ("yt-stub-ex2", "yt_reviewer_2",
+             f"{target_brand} App Review: Is It Worth Using?",
+             f"I have been using {target_brand} for 3 months. The app is slow to load and the search "
+             f"filters don't work well. Agents listed don't respond to calls or messages."),
+            ("yt-stub-ex3", "yt_reviewer_3",
+             f"My Experience Buying a Home Through {target_brand}",
+             f"The {target_brand} platform showed budget-friendly options but hidden charges were added "
+             f"later. The final price was 15% more than what was shown. Not transparent at all."),
+            ("yt-stub-ex4", "yt_reviewer_4",
+             f"{target_brand} vs Competitors: Honest Review",
+             f"Comparing {target_brand} with other portals — the photo quality is lower and many listings "
+             f"lack RERA numbers. Customer support took 4 days to respond to my query."),
+            ("yt-stub-ex5", "yt_reviewer_5",
+             f"Fraud Alert: My {target_brand} Experience",
+             f"Lost my token money after booking through {target_brand}. The builder was not verified. "
+             f"Platform does not take responsibility. Beware of unverified listings."),
+        ]
+
+        items = []
+        for video_id, author, title, description in stubs:
+            ext_id = f"youtube-{brand_slug}-{video_id}"
+            source_url = f"https://youtube.com/watch?v={video_id}"
+            combined = f"{title}\n\n{description}"
+            items.append(ScrapedItem(
                 source_name=self.source_name,
                 platform_name=target_brand,
                 content_type="video",
-                external_id=external_id,
-                author_name="yt_channel_1",
+                external_id=ext_id,
+                author_name=author,
                 source_url=source_url,
                 published_at=None,
                 fetched_at=fetched_at,
@@ -181,35 +331,36 @@ class YouTubeScraper(BaseSourceScraper):
                 parser_version=f"{self.parser_version}-stub",
                 dedupe_key=build_dedupe_key(
                     source_name=self.source_name,
-                    external_id=external_id,
+                    external_id=ext_id,
                     source_url=source_url,
-                    raw_text=stub_text,
+                    raw_text=combined,
                 ),
-                raw_payload_json={"stub": True, "reason": fallback_reason},
-                raw_text=stub_text,
-                cleaned_text=stub_text,
+                raw_payload_json={"stub": True, "reason": fallback_reason, "title": title},
+                raw_text=combined,
+                cleaned_text=combined,
                 language="en",
                 metadata_json={
-                    "video_id": "example1",
+                    "video_id": video_id,
                     "fetch_mode": "stub",
                     "fallback_reason": fallback_reason,
                 },
-            )
-        ]
+            ))
+        return items
 
     def scrape(self, target_brand: str) -> list[ScrapedItem]:
         settings = get_settings()
 
         if not settings.scraper_enable_live_fetch:
+            logger.info("YouTube: live fetch disabled, using stub data")
             return self._build_stub_items(
                 target_brand=target_brand,
                 fallback_reason="Live fetch disabled in settings",
             )
 
-        try:
-            channel_ids = self._get_channel_ids(target_brand)
+        # Tier 1: Known brand channel RSS feeds
+        channel_ids = self._get_channel_ids(target_brand)
+        if channel_ids:
             all_items: list[ScrapedItem] = []
-
             for channel_id in channel_ids:
                 try:
                     xml_text = self._fetch_channel_feed(channel_id)
@@ -217,23 +368,26 @@ class YouTubeScraper(BaseSourceScraper):
                     all_items.extend(items)
                     if len(all_items) >= settings.scraper_max_items_per_source:
                         break
-                except Exception:
+                except Exception as exc:
+                    logger.warning("YouTube channel %s failed: %s", channel_id, exc)
                     continue
 
             if all_items:
+                logger.info("YouTube RSS: fetched %d items for '%s'", len(all_items), target_brand)
                 return all_items[:settings.scraper_max_items_per_source]
+            logger.warning("YouTube RSS: 0 items from channel feeds for '%s'", target_brand)
 
-            if settings.scraper_fail_open_to_stub:
-                return self._build_stub_items(
-                    target_brand=target_brand,
-                    fallback_reason="No items from YouTube RSS feeds",
-                )
-            return []
+        # Tier 2: YouTube search page scraping
+        search_items = self._scrape_via_search(target_brand)
+        if search_items:
+            return search_items[:settings.scraper_max_items_per_source]
 
-        except Exception as exc:
-            if settings.scraper_fail_open_to_stub:
-                return self._build_stub_items(
-                    target_brand=target_brand,
-                    fallback_reason=str(exc),
-                )
-            raise
+        logger.warning("YouTube: all live tiers returned 0 items for '%s'", target_brand)
+
+        # Tier 3: Stub fallback (only if explicitly enabled)
+        if settings.scraper_fail_open_to_stub:
+            return self._build_stub_items(
+                target_brand=target_brand,
+                fallback_reason="All live YouTube tiers failed",
+            )
+        return []

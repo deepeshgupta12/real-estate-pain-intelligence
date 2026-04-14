@@ -732,3 +732,80 @@ export async function bulkRejectReviewItems(
     body: JSON.stringify(payload),
   });
 }
+
+// ---------------------------------------------------------------------------
+// Evidence Explorer (P13)
+// ---------------------------------------------------------------------------
+
+export type RawEvidenceResponse = {
+  id: number;
+  scrape_run_id: number;
+  source_name: string;
+  platform_name: string;
+  content_type: string;
+  external_id: string | null;
+  author_name: string | null;
+  source_url: string | null;
+  published_at: string | null;
+  fetched_at: string | null;
+  source_query: string | null;
+  parser_version: string | null;
+  raw_text: string | null;
+  cleaned_text: string | null;
+  language: string | null;
+  resolved_language: string | null;
+  normalization_status: string;
+  multilingual_status: string;
+  metadata_json: Record<string, unknown>;
+  created_at: string;
+};
+
+export async function fetchEvidence(params?: {
+  runId?: number;
+  sourceName?: string;
+  contentType?: string;
+  limit?: number;
+}): Promise<RawEvidenceResponse[]> {
+  return fetchJson<RawEvidenceResponse[]>("/api/v1/evidence", {
+    query: {
+      run_id: params?.runId,
+      source_name: params?.sourceName,
+      content_type: params?.contentType,
+      limit: params?.limit ?? 100,
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Retrieval Search (P14)
+// ---------------------------------------------------------------------------
+
+export type RetrievalSearchResult = {
+  retrieval_document_id: number;
+  scrape_run_id: number;
+  raw_evidence_id: number | null;
+  agent_insight_id: number | null;
+  title: string | null;
+  document_type: string;
+  language_code: string | null;
+  score: number;
+  score_type: string;
+  document_text: string | null;
+  metadata_json: Record<string, unknown>;
+  created_at: string;
+};
+
+export async function searchRetrieval(params: {
+  query: string;
+  topK?: number;
+  runId?: number;
+}): Promise<RetrievalSearchResult[]> {
+  return fetchJson<RetrievalSearchResult[]>("/api/v1/retrieval/search", {
+    method: "POST",
+    body: JSON.stringify({
+      query: params.query,
+      top_k: params.topK ?? 5,
+      run_id: params.runId ?? null,
+    }),
+  });
+}

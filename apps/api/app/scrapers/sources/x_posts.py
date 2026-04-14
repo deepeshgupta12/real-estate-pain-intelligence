@@ -100,17 +100,31 @@ class XPostsScraper(BaseSourceScraper):
     def _build_stub_items(self, target_brand: str, fallback_reason: str | None = None) -> list[ScrapedItem]:
         fetched_at = datetime.now(timezone.utc)
         source_query = self._build_query(target_brand)
-        stub_text = f"People are saying {target_brand} has too many duplicate property listings."
-        external_id = f"x-{target_brand.lower().replace(' ', '-')}-001"
-        source_url = "https://x.com/example/status/1"
+        brand_slug = target_brand.lower().replace(" ", "-")
 
-        return [
-            ScrapedItem(
+        stubs = [
+            ("x-stub-001", "x_user_1",
+             f"{target_brand} has too many duplicate property listings. Same flat shown 5 times with different prices. Waste of time."),
+            ("x-stub-002", "x_user_2",
+             f"Frustrated with {target_brand}. Agent called 15 times after one enquiry and never actually helped. Blocking now."),
+            ("x-stub-003", "x_user_3",
+             f"The {target_brand} app is crashing every time I try to apply filters for budget properties in Pune. Fix your app please."),
+            ("x-stub-004", "x_user_4",
+             f"Saw a great property on {target_brand} at ₹45L. Called the number — property was sold 2 months ago. Why are stale listings still up?"),
+            ("x-stub-005", "x_user_5",
+             f"{target_brand} does not verify builders. Friend got scammed for ₹2L token on an under-construction project. No accountability."),
+        ]
+
+        items = []
+        for ext_suffix, author, text in stubs:
+            ext_id = f"{brand_slug}-{ext_suffix}"
+            source_url = f"https://x.com/{author}/status/{ext_suffix}"
+            items.append(ScrapedItem(
                 source_name=self.source_name,
                 platform_name=target_brand,
                 content_type="post",
-                external_id=external_id,
-                author_name="x_user_1",
+                external_id=ext_id,
+                author_name=author,
                 source_url=source_url,
                 published_at=None,
                 fetched_at=fetched_at,
@@ -118,21 +132,21 @@ class XPostsScraper(BaseSourceScraper):
                 parser_version=f"{self.parser_version}-stub",
                 dedupe_key=build_dedupe_key(
                     source_name=self.source_name,
-                    external_id=external_id,
+                    external_id=ext_id,
                     source_url=source_url,
-                    raw_text=stub_text,
+                    raw_text=text,
                 ),
                 raw_payload_json={"stub": True, "reason": fallback_reason},
-                raw_text=stub_text,
-                cleaned_text=stub_text,
+                raw_text=text,
+                cleaned_text=text,
                 language="en",
                 metadata_json={
-                    "network": "x_stub",
+                    "network": "public_social_discussion",
                     "fetch_mode": "stub",
                     "fallback_reason": fallback_reason,
                 },
-            )
-        ]
+            ))
+        return items
 
     def scrape(self, target_brand: str) -> list[ScrapedItem]:
         settings = get_settings()
