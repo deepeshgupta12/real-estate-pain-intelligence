@@ -84,6 +84,11 @@ class Settings(BaseSettings):
     api_key_enabled: bool = False
     api_key_secret: str | None = None
 
+    # YouTube Data API v3 — free tier: 10,000 units/day (~100 searches)
+    # Get key at: console.cloud.google.com → Enable "YouTube Data API v3" → Credentials
+    youtube_data_api_key: str | None = None
+    youtube_data_api_base_url: str = "https://www.googleapis.com/youtube/v3"
+
     scraper_reddit_rss_enabled: bool = True
     # Reddit official API (PRAW) — set these to use the official API instead of RSS
     reddit_client_id: str | None = None
