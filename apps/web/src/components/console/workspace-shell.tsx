@@ -1,10 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Sidebar } from "@/components/app-shell/sidebar";
 import { Topbar } from "@/components/app-shell/topbar";
 import { HeroBanner } from "@/components/dashboard/hero-banner";
-import { NavPreviewCard } from "@/components/dashboard/nav-preview-card";
 import { OverviewStatCard } from "@/components/dashboard/overview-stat-card";
 import { PipelineStageCard } from "@/components/dashboard/pipeline-stage-card";
 import { CurrentRunPanel } from "@/components/console/current-run-panel";
@@ -19,6 +18,7 @@ import { RunDiagnosticsPanel } from "@/components/console/run-diagnostics-panel"
 import { RunEventsPanel } from "@/components/console/run-events-panel";
 import { RunSetupPanel } from "@/components/console/run-setup-panel";
 import { ExportsPanel } from "@/components/console/exports-panel";
+import { PainPointsPanel } from "@/components/console/pain-points-panel";
 import {
   createScrapeRun,
   dispatchRun,
@@ -107,6 +107,13 @@ const navigationItems: NavigationItem[] = [
     description: "Track which steps have completed.",
     badge: "Guide",
     href: "#pipeline-progress",
+  },
+  {
+    id: "pain-points",
+    label: "Pain Points",
+    description: "Pain point insights grouped by buyer persona.",
+    badge: "Live",
+    href: "#pain-points",
   },
   {
     id: "pipeline-actions",
@@ -203,17 +210,6 @@ export function WorkspaceShell({
   const staleRunsCount = observabilityOverview?.stale_active_runs_count ?? 0;
   const reviewBacklogCount = observabilityOverview?.review_backlog_count ?? 0;
   const currentRunId = currentRun?.id ?? null;
-
-  const statusSummary = useMemo(() => {
-    if (!currentRun) {
-      return "No run is selected. Create a new run or load an existing run to begin operating the workspace.";
-    }
-
-    return `Run #${currentRun.id} is active for ${currentRun.target_brand} and is currently in "${currentRun.pipeline_stage.replaceAll(
-      "_",
-      " ",
-    )}" with status "${currentRun.status.replaceAll("_", " ")}".`;
-  }, [currentRun]);
 
   const refreshWorkspace = useCallback(
     async (preferredRunId?: number | null, successMessage?: string) => {
@@ -513,32 +509,6 @@ export function WorkspaceShell({
             />
           </section>
 
-          <section className="mt-8 grid gap-6 xl:grid-cols-2">
-            <NavPreviewCard
-              title="Platform capabilities"
-              description="End-to-end pain point intelligence from public customer signals."
-              points={[
-                "Scrape Reddit, YouTube, app stores & review sites",
-                "Multilingual support — English, Hindi, Hinglish",
-                "LLM-assisted pain point classification & root cause analysis",
-                "Export to CSV, JSON, PDF and sync to Notion",
-              ]}
-            />
-
-            <NavPreviewCard
-              title="Current workspace context"
-              description={statusSummary}
-              points={[
-                workspaceLoading ? "Workspace refresh is in progress" : "Workspace is ready",
-                currentReadiness?.ready_for_finalization
-                  ? "The current run passes final readiness"
-                  : "The current run still has pending readiness checks",
-                `Available feedback sources: ${availableSources.length}`,
-                `Saved runs visible in workspace: ${runs.length}`,
-              ]}
-            />
-          </section>
-
           <section className="mt-8">
             <div className="mb-4">
               <p className="text-[11px] font-semibold uppercase tracking-widest text-blue-600">
@@ -646,6 +616,8 @@ export function WorkspaceShell({
               currentRun={currentRun}
               readiness={currentReadiness}
             />
+
+            <PainPointsPanel runId={currentRunId} />
 
             <PipelineActionsPanel
               currentRunId={currentRunId}

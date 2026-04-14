@@ -85,6 +85,13 @@ class Settings(BaseSettings):
     api_key_secret: str | None = None
 
     scraper_reddit_rss_enabled: bool = True
+    # Reddit official API (PRAW) — set these to use the official API instead of RSS
+    reddit_client_id: str | None = None
+    reddit_client_secret: str | None = None
+    reddit_user_agent: str = "repi-bot/1.0 by /u/repi_scraper"
+    reddit_username: str | None = None   # optional, for script-mode auth
+    reddit_password: str | None = None   # optional, for script-mode auth
+    reddit_api_enabled: bool = False     # set True once credentials are configured
 
     observability_stale_run_seconds: int = 300
     observability_recent_failure_window_minutes: int = 60

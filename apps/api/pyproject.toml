@@ -23,7 +23,8 @@ dependencies = [
   "python-multipart>=0.0.9",
   "prometheus-fastapi-instrumentator>=6.0.0",
   "sentry-sdk[fastapi]>=1.40.0",
-  "email-validator>=2.1.0"
+  "email-validator>=2.1.0",
+  "praw>=7.7.0"
 ]
 
 [project.optional-dependencies]

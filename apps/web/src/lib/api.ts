@@ -204,6 +204,23 @@ export type RunIntelligenceResponse = {
   orchestrator_notes: string | null;
 };
 
+export type AgentInsightResponse = {
+  id: number;
+  scrape_run_id: number;
+  raw_evidence_id: number;
+  journey_stage: string | null;
+  pain_point_label: string | null;
+  pain_point_summary: string | null;
+  taxonomy_cluster: string | null;
+  root_cause_hypothesis: string | null;
+  competitor_label: string | null;
+  priority_label: string | null;
+  action_recommendation: string | null;
+  confidence_score: string | null;
+  insight_status: string;
+  created_at: string;
+};
+
 export type RetrievalIndexResponse = {
   run_id: number;
   indexed_count: number;
@@ -596,6 +613,10 @@ export async function generateExportJobs(
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export async function fetchRunInsights(runId: number): Promise<AgentInsightResponse[]> {
+  return fetchJson<AgentInsightResponse[]>(`/api/v1/intelligence/${runId}`);
 }
 
 export async function fetchExportJobs(runId: number): Promise<ExportJobResponse[]> {
