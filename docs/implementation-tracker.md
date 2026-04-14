@@ -1194,6 +1194,19 @@ Full P13/P14 frontend + scraper improvements across all sources:
 - `fetchEvidence()` helper added
 - `searchRetrieval()` helper added
 
+### Step 34 — Bug fixes (422 + error display): ✅ Delivered
+Two critical runtime bugs discovered and fixed post-delivery:
+
+**Bug 1 — `POST /api/v1/runs` returning 422 Unprocessable Entity for `source_name: "x"`**
+- Root cause: `XPostsScraper.source_name = "x"` but the Pydantic validator in `apps/api/app/schemas/run.py` had `"x_posts"` in its allowed set. Any attempt to create an X-source run was rejected.
+- Fix: Updated the `validate_source_name` allowlist from `"x_posts"` → `"x"` to match the scraper registry key.
+- File changed: `apps/api/app/schemas/run.py`
+
+**Bug 2 — `[object Object]` shown in error banner instead of human-readable message**
+- Root cause: FastAPI 422 validation errors return `detail` as an array `[{"msg": "...", "loc": ["body", "field"]}]`, not a string. The `buildErrorMessage` helper in `api.ts` assumed `detail` was always a string, so React rendered the array as `[object Object]`.
+- Fix: Updated `buildErrorMessage` to detect when `detail` is an array and format it as `field: message · field: message`.
+- File changed: `apps/web/src/lib/api.ts`
+
 ### Remaining gaps (lower priority):
 The product is now **production-ready** for single-tenant deployment with full live scraping. The following items represent further quality and scale improvements:
 

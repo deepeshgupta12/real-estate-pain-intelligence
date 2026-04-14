@@ -441,9 +441,23 @@ function buildUrl(path: string, query?: FetchOptions["query"]): string {
 
 function buildErrorMessage(path: string, message: string): string {
   try {
-    const parsed = JSON.parse(message) as { detail?: string };
+    const parsed = JSON.parse(message) as {
+      detail?: string | Array<{ msg: string; loc?: string[] }>;
+    };
     if (parsed.detail) {
-      return parsed.detail;
+      // FastAPI returns a plain string detail for most errors
+      if (typeof parsed.detail === "string") {
+        return parsed.detail;
+      }
+      // FastAPI 422 Unprocessable Entity returns an array of validation errors
+      if (Array.isArray(parsed.detail)) {
+        return parsed.detail
+          .map((e) => {
+            const field = e.loc ? e.loc.filter((l) => l !== "body").join(".") : "";
+            return field ? `${field}: ${e.msg}` : e.msg;
+          })
+          .join(" · ");
+      }
     }
   } catch {
     // Ignore JSON parsing failure and fall back to raw text.
