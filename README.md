@@ -78,7 +78,10 @@ A single run targets one brand (e.g. "Square Yards", "NoBroker", "MagicBricks") 
 - **Live data by default** (`SCRAPER_FAIL_OPEN_TO_STUB=false`)
 - Reddit via PRAW (official API) → PullPush.io archive → RSS fallback
 - YouTube via YouTube Data API v3 → yt-dlp fallback
-- App reviews via `google-play-scraper` SDK → Apple App Store RSS
+- App reviews: up to 100 most-recent per store from **both** Google Play (`google-play-scraper` SDK) and Apple App Store (iTunes RSS pages 1 + 2)
+- Each review/post tagged with `store_platform` ("google_play" / "ios_app_store") and `platform` ("reddit" / "youtube" / "x_twitter") in metadata
+- **Sentiment filtering** — purely positive content (rating ≥ 4, no negative signal keywords) is skipped at collection time across all scrapers
+- **Pain point summary** — first meaningful sentence extracted per item and stored in metadata for quick-scan display
 
 ### Intelligence Pipeline
 - **Cleaning & normalisation** — deduplication, language detection, content-type tagging
@@ -94,7 +97,7 @@ A single run targets one brand (e.g. "Square Yards", "NoBroker", "MagicBricks") 
 - **Streaming pipeline progress** — real-time SSE updates per step
 - **Evidence Explorer** — browse every raw post/review collected, filter by source and type, full-text search
 - **Semantic Search** — natural language search across the vector index
-- **Human Review Queue** — approve, reject, or flag extracted pain points
+- **Human Review Queue** — filter by Pending / Approved / Rejected / All with live counts; bulk approve/reject with Select All; paginated (20 items/page)
 - **Run Diagnostics** — health checks, stale run detection, recent failures
 - **Pipeline Actions** — 9-step orchestrated pipeline with one-click execution
 - **Exports** — download results as CSV, JSON, or PDF
@@ -381,7 +384,7 @@ The console is a single-page workspace at `http://localhost:3000` with a left si
 | **Pain Points** | Extracted and clustered pain points with priority scores |
 | **Evidence Explorer** | Browse raw collected posts, filter by source/type, full-text search |
 | **Semantic Search** | Natural language search across the vector index |
-| **Review Console** | Approve, reject, or flag pain points in the human review queue |
+| **Review Console** | Filter queue by Pending / Approved / Rejected / All; live counts update instantly after each action; bulk approve/reject with Select All; 20-items-per-page pagination |
 | **Run Diagnostics** | System health, stale runs, recent failures |
 | **Exports** | Download CSV, JSON, or PDF for the current run |
 
@@ -416,7 +419,7 @@ Three formats are generated per run via the **Create Exports** pipeline step:
 | **JSON** | Full structured output including taxonomy, root causes, and agent metadata |
 | **PDF** | Formatted report with executive summary, priority matrix, and action plan |
 
-Exports are saved to `apps/api/generated_exports/` and downloadable from the Exports panel in the console.
+Exports are saved to `apps/api/generated_exports/` and downloadable from the **Exports** panel in the console. Download links call the FastAPI backend directly (`http://localhost:8000/api/v1/exports/download/:id`) — configure `NEXT_PUBLIC_API_BASE_URL` if the API runs on a different host or port.
 
 ---
 
@@ -455,9 +458,39 @@ RESTART IDENTITY CASCADE;
 
 ---
 
+## Changelog
+
+### Step 35 — Scraper hardening, Review Queue UX, FE cleanup (`feat/step-35-enhancements`)
+
+**Scraper improvements (all sources)**
+- Dual-store app reviews: up to 100 most-recent reviews fetched from both Google Play and Apple App Store per run
+- Sentiment filtering applied across Reddit, YouTube, X, App Reviews, and Review Sites — purely positive signals (rating ≥ 4, no negative keywords) are discarded at collection time
+- Each item tagged with `platform` and `store_platform` metadata for per-source breakdown in the UI
+- `pain_point_summary` (first sentence of content) extracted and stored per item
+
+**Review Queue**
+- Added Pending / Approved / Rejected / All filter tabs with live counts driven from local React state — counts update instantly after every approve/reject action without a backend re-fetch
+- Default view is **Pending** so you land immediately on actionable items
+- Empty state "🎉 All caught up — no pending reviews!" when pending tab is empty
+- Colour-coded item cards (green = approved, red = rejected, blue = selected)
+- Bulk actions toolbar and inline approve/reject buttons only shown on Pending tab
+- 20-items-per-page pagination with numbered page buttons; pagination resets on filter change
+
+**Pain Points panel**
+- Per-source summary chip row restored below the panel header, showing count per source with colour-coded badges (Reddit, YouTube, App Reviews, Review Sites, X)
+
+**Dashboard**
+- Removed redundant APPLICATION / ENVIRONMENT / API PREFIX / CURRENT BUILD meta cards from the overview header
+
+**Bug fixes**
+- **Hydration mismatch** in Activity Log panel: relative timestamps ("32m ago") now computed client-side only via `useEffect`, eliminating the SSR/client text mismatch that caused React's hydration error
+- **Export download 404**: download links now use the full FastAPI backend URL instead of a relative path that was incorrectly routed to Next.js
+
+---
+
 ## Contributing
 
-Active development branch: `feat/step-34-evidence-explorer-scraper-fixes`
+Active development branch: `feat/step-35-enhancements`
 
 ```bash
 # Create a feature branch off main
