@@ -3,10 +3,13 @@ FROM python:3.11-slim AS builder
 
 WORKDIR /build
 
-# Install build tools
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install build tools — use --fix-missing and retry to handle transient apt failures
+RUN apt-get update --fix-missing && apt-get install -y --no-install-recommends \
     build-essential libpq-dev gcc curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    || (sleep 5 && apt-get update --fix-missing && apt-get install -y --no-install-recommends \
+        build-essential libpq-dev gcc curl \
+        && rm -rf /var/lib/apt/lists/*)
 
 # Copy dependency file
 COPY pyproject.toml ./
@@ -23,10 +26,13 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser
 
 WORKDIR /app
 
-# Runtime system deps only
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Runtime system deps only — with retry on transient network failure
+RUN apt-get update --fix-missing && apt-get install -y --no-install-recommends \
     libpq5 curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    || (sleep 5 && apt-get update --fix-missing && apt-get install -y --no-install-recommends \
+        libpq5 curl \
+        && rm -rf /var/lib/apt/lists/*)
 
 # Copy installed packages from builder
 COPY --from=builder /install /usr/local
