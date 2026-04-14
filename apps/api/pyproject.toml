@@ -25,7 +25,8 @@ dependencies = [
   "sentry-sdk[fastapi]>=1.40.0",
   "email-validator>=2.1.0",
   "praw>=7.7.0",
-  "google-play-scraper>=1.2.7"
+  "google-play-scraper>=1.2.7",
+  "yt-dlp>=2024.1.1"
 ]
 
 [project.optional-dependencies]
