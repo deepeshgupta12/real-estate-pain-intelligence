@@ -208,6 +208,7 @@ export type AgentInsightResponse = {
   id: number;
   scrape_run_id: number;
   raw_evidence_id: number;
+  source_name: string | null;
   journey_stage: string | null;
   pain_point_label: string | null;
   pain_point_summary: string | null;

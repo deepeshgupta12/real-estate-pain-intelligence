@@ -1,13 +1,53 @@
 """
 Reddit scraper with three-tier fallback:
   1. PRAW (official Reddit API) — requires REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET
-  2. Reddit RSS feed           — no auth, but often blocked/rate-limited
-  3. Stub data                 — always works, used when SCRAPER_FAIL_OPEN_TO_STUB=true
+  2. PullPush.io (Pushshift-compatible archive, no auth)
+  3. Reddit RSS feed           — no auth, but often blocked/rate-limited
+  4. Stub data                 — always works, used when SCRAPER_FAIL_OPEN_TO_STUB=true
+
+Enhancements:
+  - Source platform tagged as "reddit" + subreddit in metadata
+  - Sentiment filter: skip posts that are purely positive (no negative signal keywords)
+  - pain_point_summary extracted for each item
 """
 import logging
 import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
+
+# Negative signal keywords — posts are kept only if they contain at least one
+NEGATIVE_SIGNAL_KEYWORDS = [
+    "worst", "terrible", "horrible", "awful", "very bad", "not good",
+    "slow", "crash", "crashing", "hang", "freezing", "bug", "glitch",
+    "fraud", "scam", "cheat", "fake", "mislead", "spam", "trap",
+    "disappoint", "frustrat", "annoying", "useless", "waste", "pathetic",
+    "hidden charge", "hidden fee", "overpriced", "not working",
+    "doesn't work", "didn't work", "not work", "broken",
+    "no response", "not respond", "ignore", "no reply", "never call",
+    "stale", "wrong", "incorrect", "inaccurate", "aggressive",
+    "haras", "refund", "complain", "complaint", "unverified",
+    "not verified", "spam call", "money lost", "lost money",
+    "no support", "poor support", "bad support", "fake listing",
+    "already sold", "not available", "unavailable", "beware",
+    "warning", "alert", "scammed", "cheated", "ripped off",
+    "problem", "issue", "error", "fail", "unable", "cannot",
+]
+
+
+def _has_negative_signal(text: str) -> bool:
+    """Return True if the post contains at least one negative keyword."""
+    text_lower = text.lower()
+    return any(kw in text_lower for kw in NEGATIVE_SIGNAL_KEYWORDS)
+
+
+def _make_pain_point_summary(text: str, max_chars: int = 140) -> str:
+    """Extract first meaningful sentence or truncate as pain point summary."""
+    text = text.strip()
+    for sep in [".", "!", "?", "\n"]:
+        idx = text.find(sep)
+        if 20 <= idx <= max_chars:
+            return text[: idx + 1].strip()
+    return text[:max_chars].rstrip() + ("…" if len(text) > max_chars else "")
 
 from app.core.config import get_settings
 from app.scrapers.base import BaseSourceScraper
@@ -103,10 +143,16 @@ class RedditScraper(BaseSourceScraper):
                         if not combined or combined == "[removed]" or combined == "[deleted]":
                             continue
 
+                        # Sentiment filter — skip purely positive posts
+                        if not _has_negative_signal(combined):
+                            continue
+
                         source_url = f"https://reddit.com{submission.permalink}"
                         published_at = datetime.fromtimestamp(
                             submission.created_utc, tz=timezone.utc
                         )
+                        subreddit_name = str(submission.subreddit)
+                        pain_summary = _make_pain_point_summary(combined)
 
                         items.append(ScrapedItem(
                             source_name=self.source_name,
@@ -130,7 +176,7 @@ class RedditScraper(BaseSourceScraper):
                                 "body": body,
                                 "score": submission.score,
                                 "num_comments": submission.num_comments,
-                                "subreddit": str(submission.subreddit),
+                                "subreddit": subreddit_name,
                                 "author": str(submission.author),
                                 "search_mode": mode,
                             }),
@@ -138,11 +184,13 @@ class RedditScraper(BaseSourceScraper):
                             cleaned_text=combined,
                             language="en",
                             metadata_json={
-                                "subreddit": str(submission.subreddit),
+                                "platform": "reddit",
+                                "subreddit": subreddit_name,
                                 "score": submission.score,
                                 "num_comments": submission.num_comments,
                                 "fetch_mode": "praw",
                                 "search_mode": mode,
+                                "pain_point_summary": pain_summary,
                             },
                         ))
 
@@ -155,7 +203,10 @@ class RedditScraper(BaseSourceScraper):
                                 comment_text = (comment.body or "").strip()
                                 if not comment_text or comment_text in ("[removed]", "[deleted]"):
                                     continue
+                                if not _has_negative_signal(comment_text):
+                                    continue
                                 comment_url = f"https://reddit.com{comment.permalink}"
+                                c_pain_summary = _make_pain_point_summary(comment_text)
                                 items.append(ScrapedItem(
                                     source_name=self.source_name,
                                     platform_name=target_brand,
@@ -184,11 +235,13 @@ class RedditScraper(BaseSourceScraper):
                                     cleaned_text=comment_text,
                                     language="en",
                                     metadata_json={
-                                        "subreddit": str(submission.subreddit),
+                                        "platform": "reddit",
+                                        "subreddit": subreddit_name,
                                         "score": comment.score,
                                         "parent_post_id": submission.id,
                                         "fetch_mode": "praw",
                                         "search_mode": "comment",
+                                        "pain_point_summary": c_pain_summary,
                                     },
                                 ))
                         except Exception:
@@ -245,6 +298,10 @@ class RedditScraper(BaseSourceScraper):
                 if not combined:
                     continue
 
+                # Sentiment filter
+                if not _has_negative_signal(combined):
+                    continue
+
                 post_id = post.get("id") or ""
                 subreddit = post.get("subreddit") or ""
                 author = post.get("author") or None
@@ -256,6 +313,7 @@ class RedditScraper(BaseSourceScraper):
                         published_at = datetime.fromtimestamp(float(created_utc), tz=timezone.utc)
                     except Exception:
                         pass
+                pain_summary = _make_pain_point_summary(combined)
 
                 items.append(ScrapedItem(
                     source_name=self.source_name,
@@ -285,10 +343,12 @@ class RedditScraper(BaseSourceScraper):
                     cleaned_text=combined,
                     language="en",
                     metadata_json={
+                        "platform": "reddit",
                         "subreddit": subreddit,
                         "score": post.get("score"),
                         "num_comments": post.get("num_comments"),
                         "fetch_mode": "pullpush",
+                        "pain_point_summary": pain_summary,
                     },
                 ))
 
@@ -344,6 +404,10 @@ class RedditScraper(BaseSourceScraper):
             if not combined:
                 continue
 
+            # Sentiment filter
+            if not _has_negative_signal(combined):
+                continue
+
             link_el = entry.find("atom:link", ns) or entry.find("link")
             source_url = (link_el.get("href") or link_el.text) if link_el is not None else None
             external_id = None
@@ -361,6 +425,7 @@ class RedditScraper(BaseSourceScraper):
                     pass
             category_el = entry.find("atom:category", ns) or entry.find("category")
             subreddit = category_el.get("term", "") if category_el is not None else ""
+            rss_pain_summary = _make_pain_point_summary(combined)
 
             items.append(ScrapedItem(
                 source_name=self.source_name,
@@ -386,7 +451,12 @@ class RedditScraper(BaseSourceScraper):
                 raw_text=combined,
                 cleaned_text=combined,
                 language="en",
-                metadata_json={"subreddit": subreddit, "fetch_mode": "rss"},
+                metadata_json={
+                    "platform": "reddit",
+                    "subreddit": subreddit,
+                    "fetch_mode": "rss",
+                    "pain_point_summary": rss_pain_summary,
+                },
             ))
 
         return items
@@ -420,6 +490,7 @@ class RedditScraper(BaseSourceScraper):
         items = []
         for ext_id, ctype, author, text, subreddit in stubs:
             url = f"https://reddit.com/r/{subreddit}/stub/{ext_id}"
+            pain_summary = _make_pain_point_summary(text)
             items.append(ScrapedItem(
                 source_name=self.source_name,
                 platform_name=target_brand,
@@ -441,9 +512,11 @@ class RedditScraper(BaseSourceScraper):
                 cleaned_text=text,
                 language="en",
                 metadata_json={
+                    "platform": "reddit",
                     "subreddit": subreddit,
                     "fetch_mode": "stub",
                     "fallback_reason": fallback_reason,
+                    "pain_point_summary": pain_summary,
                 },
             ))
         return items

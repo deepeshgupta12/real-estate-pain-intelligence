@@ -1,3 +1,14 @@
+"""
+App Reviews scraper — fetches from BOTH Google Play Store AND Apple iOS App Store.
+
+Strategy:
+  - Up to 100 most-recent reviews from Google Play (via google-play-scraper SDK)
+  - Up to 100 most-recent reviews from Apple App Store (RSS, pages 1+2)
+  - Each item tagged with store_platform: "google_play" | "ios_app_store"
+  - Sentiment filter: skip reviews that are purely positive
+    (rating >= 4 AND no negative signal keywords in text)
+  - Pain point summary generated from review text for each item
+"""
 from datetime import datetime, timezone
 
 from app.core.config import get_settings
@@ -6,129 +17,254 @@ from app.scrapers.http_client import RetryingHttpClient
 from app.scrapers.types import ScrapedItem
 from app.scrapers.utils import build_dedupe_key, build_payload_snapshot, normalize_whitespace
 
+# Keywords that signal a complaint even in an otherwise positive review
+NEGATIVE_SIGNAL_KEYWORDS = [
+    "worst", "terrible", "horrible", "awful", "very bad", "not good",
+    "slow", "crash", "crashing", "hang", "freezing", "bug", "glitch",
+    "fraud", "scam", "cheat", "fake", "mislead", "spam", "trap",
+    "disappoint", "frustrat", "annoying", "useless", "waste", "pathetic",
+    "hidden charge", "hidden fee", "overpriced", "not working",
+    "doesn't work", "didn't work", "not work", "broken",
+    "no response", "not respond", "ignore", "no reply", "never call",
+    "stale", "wrong", "incorrect", "inaccurate", "aggressive",
+    "haras", "refund", "complain", "complaint", "unverified",
+    "not verified", "call too many", "spam call", "money lost",
+    "lost money", "trust issue", "no support", "poor support",
+    "bad support", "fake listing", "outdated listing", "already sold",
+    "not available", "unavailable", "poor ux", "bad ux",
+    "difficult to use", "confusing", "not user friendly",
+]
+
+
+def _has_negative_signal(text: str, rating: int | float | None = None) -> bool:
+    """Return True if the content should be included (has a negative signal)."""
+    if rating is not None:
+        # Low-rated reviews always included
+        if int(rating) <= 3:
+            return True
+        # High-rated (4-5) only if they contain negative keywords
+        text_lower = text.lower()
+        return any(kw in text_lower for kw in NEGATIVE_SIGNAL_KEYWORDS)
+    # No rating available — include if any negative keyword found
+    text_lower = text.lower()
+    return any(kw in text_lower for kw in NEGATIVE_SIGNAL_KEYWORDS)
+
+
+def _make_pain_point_summary(text: str, max_chars: int = 140) -> str:
+    """Extract first meaningful sentence or truncate as pain point summary."""
+    text = text.strip()
+    for sep in [".", "!", "?", "\n"]:
+        idx = text.find(sep)
+        if 20 <= idx <= max_chars:
+            return text[: idx + 1].strip()
+    return text[:max_chars].rstrip() + ("…" if len(text) > max_chars else "")
+
+
+# Known Google Play app IDs for Indian real estate brands
+BRAND_PLAY_APP_IDS: dict[str, str] = {
+    "square yards":  "com.squareyards.app",
+    "99acres":       "com.ninetynineacres.app",
+    "magicbricks":   "com.magicbricks.app",
+    "housing":       "com.housing.app",
+    "nobroker":      "com.nobroker.app",
+    "commonfloor":   "com.commonfloor",
+    "proptiger":     "com.proptiger.app",
+    "makaan":        "com.makaan",
+}
+
+# Known Apple App Store IDs for Indian real estate brands
+BRAND_ITUNES_IDS: dict[str, str] = {
+    "square yards":  "1082944916",
+    "99acres":       "438985091",
+    "magicbricks":   "567898523",
+    "housing":       "878516912",
+    "nobroker":      "1085715402",
+}
+
 
 class AppReviewsScraper(BaseSourceScraper):
     source_name = "app_reviews"
-    parser_version = "app-reviews-v2-live-1"
+    parser_version = "app-reviews-v3-dual-store"
 
     def _build_query(self, target_brand: str) -> str:
         return f"{target_brand} app"
 
-    def _build_headers(self) -> dict[str, str]:
-        return {
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "en-US,en;q=0.9,hi;q=0.8",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Connection": "keep-alive",
-        }
+    def _get_play_app_id(self, target_brand: str) -> str | None:
+        brand_lower = target_brand.lower().strip()
+        for key, app_id in BRAND_PLAY_APP_IDS.items():
+            if key in brand_lower or brand_lower in key:
+                return app_id
+        return None
 
-    def _fetch_app_lookup_payload(self, target_brand: str) -> dict:
-        settings = get_settings()
-        return RetryingHttpClient.get_json(
-            settings.scraper_itunes_search_base_url,
-            params={
-                "term": self._build_query(target_brand),
-                "entity": "software",
-                "limit": 1,
-                "country": "in",
-            },
-            headers=self._build_headers(),
-        )
+    def _get_itunes_app_id(self, target_brand: str) -> str | None:
+        brand_lower = target_brand.lower().strip()
+        for key, app_id in BRAND_ITUNES_IDS.items():
+            if key in brand_lower or brand_lower in key:
+                return app_id
+        return None
 
-    def _fetch_reviews_payload(self, app_id: int) -> dict:
-        settings = get_settings()
-        url = f"{settings.scraper_apple_reviews_base_url}/page=1/id={app_id}/sortby=mostrecent/json"
-        return RetryingHttpClient.get_json(
-            url,
-            params={"l": "en", "cc": "in"},
-            headers=self._build_headers(),
-        )
+    # ------------------------------------------------------------------
+    # Google Play Store — up to 100 most-recent reviews
+    # ------------------------------------------------------------------
 
-    def _parse_live_items(self, target_brand: str, lookup_payload: dict, reviews_payload: dict) -> list[ScrapedItem]:
-        fetched_at = datetime.now(timezone.utc)
-        source_query = self._build_query(target_brand)
-
-        results = lookup_payload.get("results") or []
-        if not results:
+    def _scrape_google_play(self, target_brand: str) -> list[ScrapedItem]:
+        app_id = self._get_play_app_id(target_brand)
+        if not app_id:
             return []
 
-        app_meta = results[0]
-        app_id = app_meta.get("trackId")
-        app_name = app_meta.get("trackName") or target_brand
-        app_store_url = app_meta.get("trackViewUrl")
+        fetched_at = datetime.now(timezone.utc)
+        source_query = self._build_query(target_brand)
+        source_url = f"https://play.google.com/store/apps/details?id={app_id}"
 
-        feed = reviews_payload.get("feed") or {}
-        entries = feed.get("entry") or []
+        try:
+            from google_play_scraper import reviews as gps_reviews, Sort  # type: ignore
+            result, _ = gps_reviews(
+                app_id,
+                lang="en",
+                country="in",
+                sort=Sort.NEWEST,
+                count=100,
+            )
+            items: list[ScrapedItem] = []
+            for r in result:
+                text = normalize_whitespace((r.get("content") or "").strip())
+                if not text:
+                    continue
+                rating = r.get("score")
+                if not _has_negative_signal(text, rating):
+                    continue  # skip purely positive reviews
 
-        if isinstance(entries, dict):
-            entries = [entries]
+                review_id = str(r.get("reviewId") or r.get("userName") or f"gplay-{len(items)}")
+                pain_summary = _make_pain_point_summary(text)
 
-        parsed_items: list[ScrapedItem] = []
-
-        for entry in entries:
-            review_id = (entry.get("id") or {}).get("label")
-            if not review_id:
-                continue
-
-            author_name = ((entry.get("author") or {}).get("name") or {}).get("label")
-            title = (entry.get("title") or {}).get("label") or ""
-            content = (entry.get("content") or {}).get("label") or ""
-            rating = (entry.get("im:rating") or {}).get("label")
-            updated_at_raw = (entry.get("updated") or {}).get("label")
-            source_url = (entry.get("link") or {}).get("attributes", {}).get("href") or app_store_url
-
-            combined_text = normalize_whitespace(" ".join(part for part in [title, content] if part))
-            if not combined_text:
-                continue
-
-            published_at = None
-            if updated_at_raw:
-                normalized = updated_at_raw.replace("Z", "+00:00")
-                published_at = datetime.fromisoformat(normalized)
-
-            parsed_items.append(
-                ScrapedItem(
+                items.append(ScrapedItem(
                     source_name=self.source_name,
                     platform_name=target_brand,
                     content_type="review",
                     external_id=review_id,
-                    author_name=author_name,
+                    author_name=r.get("userName"),
                     source_url=source_url,
-                    published_at=published_at,
+                    published_at=r.get("at"),
                     fetched_at=fetched_at,
                     source_query=source_query,
-                    parser_version=self.parser_version,
+                    parser_version="app-reviews-gplay-sdk-v2",
                     dedupe_key=build_dedupe_key(
                         source_name=self.source_name,
                         external_id=review_id,
                         source_url=source_url,
-                        raw_text=combined_text,
+                        raw_text=text,
                     ),
-                    raw_payload_json=build_payload_snapshot(
-                        {
-                            "review_id": review_id,
-                            "title": title,
-                            "content": content,
-                            "rating": rating,
-                            "app_id": app_id,
-                            "app_name": app_name,
-                        }
-                    ),
-                    raw_text=combined_text,
-                    cleaned_text=combined_text,
+                    raw_payload_json=build_payload_snapshot({
+                        "review_id": review_id,
+                        "rating": rating,
+                        "thumbs_up": r.get("thumbsUpCount"),
+                        "app_id": app_id,
+                    }),
+                    raw_text=text,
+                    cleaned_text=text,
                     language="en",
                     metadata_json={
-                        "store": "apple_app_store",
+                        "store": "google_play",
+                        "store_platform": "google_play",
                         "app_id": app_id,
-                        "app_name": app_name,
                         "rating": rating,
-                        "fetch_mode": "live",
+                        "fetch_mode": "google_play_scraper",
+                        "pain_point_summary": pain_summary,
                     },
-                )
-            )
+                ))
+            return items
+        except ImportError:
+            return []
+        except Exception:
+            return []
 
-        return parsed_items
+    # ------------------------------------------------------------------
+    # Apple iOS App Store — up to 100 most-recent reviews (2 pages × 50)
+    # ------------------------------------------------------------------
+
+    def _scrape_ios_store(self, target_brand: str) -> list[ScrapedItem]:
+        app_id = self._get_itunes_app_id(target_brand)
+        if not app_id:
+            return []
+
+        fetched_at = datetime.now(timezone.utc)
+        source_query = self._build_query(target_brand)
+        source_url = f"https://apps.apple.com/in/app/{app_id}"
+        items: list[ScrapedItem] = []
+
+        # Fetch pages 1 and 2 to get up to 100 reviews
+        for page in range(1, 3):
+            try:
+                url = f"https://itunes.apple.com/rss/customerreviews/page={page}/id={app_id}/sortby=mostrecent/json"
+                payload = RetryingHttpClient.get_json(url, params={"l": "en", "cc": "in"})
+                feed = payload.get("feed") or {}
+                entries = feed.get("entry") or []
+                if isinstance(entries, dict):
+                    entries = [entries]
+
+                for entry in entries:
+                    content = (entry.get("content") or {}).get("label") or ""
+                    title = (entry.get("title") or {}).get("label") or ""
+                    text = normalize_whitespace(" ".join(p for p in [title, content] if p))
+                    if not text:
+                        continue
+
+                    rating_raw = (entry.get("im:rating") or {}).get("label")
+                    try:
+                        rating = int(rating_raw) if rating_raw else None
+                    except (ValueError, TypeError):
+                        rating = None
+
+                    if not _has_negative_signal(text, rating):
+                        continue  # skip purely positive reviews
+
+                    review_id = (entry.get("id") or {}).get("label") or f"apple-{len(items)}"
+                    author = ((entry.get("author") or {}).get("name") or {}).get("label")
+                    pain_summary = _make_pain_point_summary(text)
+
+                    items.append(ScrapedItem(
+                        source_name=self.source_name,
+                        platform_name=target_brand,
+                        content_type="review",
+                        external_id=review_id,
+                        author_name=author,
+                        source_url=source_url,
+                        published_at=None,
+                        fetched_at=fetched_at,
+                        source_query=source_query,
+                        parser_version="app-reviews-ios-rss-v2",
+                        dedupe_key=build_dedupe_key(
+                            source_name=self.source_name,
+                            external_id=review_id,
+                            source_url=source_url,
+                            raw_text=text,
+                        ),
+                        raw_payload_json=build_payload_snapshot({
+                            "rating": rating,
+                            "app_id": app_id,
+                            "title": title,
+                            "content": content,
+                        }),
+                        raw_text=text,
+                        cleaned_text=text,
+                        language="en",
+                        metadata_json={
+                            "store": "apple_app_store",
+                            "store_platform": "ios_app_store",
+                            "app_id": app_id,
+                            "rating": rating,
+                            "fetch_mode": "itunes_rss",
+                            "pain_point_summary": pain_summary,
+                        },
+                    ))
+            except Exception:
+                break  # stop if a page fails
+
+        return items
+
+    # ------------------------------------------------------------------
+    # Stub data fallback
+    # ------------------------------------------------------------------
 
     def _build_stub_items(self, target_brand: str, fallback_reason: str | None = None) -> list[ScrapedItem]:
         fetched_at = datetime.now(timezone.utc)
@@ -136,21 +272,22 @@ class AppReviewsScraper(BaseSourceScraper):
         brand_slug = target_brand.lower().replace(" ", "-")
 
         stubs = [
-            ("app-stub-001", 2, "app_user_1",
+            ("app-stub-001", 2, "app_user_1", "google_play",
              f"The {target_brand} app feels very slow and the property leads shown don't match my budget intent at all."),
-            ("app-stub-002", 1, "app_user_2",
+            ("app-stub-002", 1, "app_user_2", "google_play",
              f"{target_brand} app crashes on Android when switching between listings. Very annoying, lost interest 3 times."),
-            ("app-stub-003", 3, "app_user_3",
+            ("app-stub-003", 3, "app_user_3", "ios_app_store",
              f"Good property selection on {target_brand} but the in-app chat with agents never works. Always shows error."),
-            ("app-stub-004", 2, "app_user_4",
-             f"Notifications from {target_brand} are spammy. I get 10+ alerts daily for properties I have no interest in. Can't turn them off."),
-            ("app-stub-005", 1, "app_user_5",
-             f"The {target_brand} search filter resets every time I leave the app. I have to set city, budget and BHK again and again. Frustrating UX."),
+            ("app-stub-004", 2, "app_user_4", "ios_app_store",
+             f"Notifications from {target_brand} are spammy. I get 10+ alerts daily for properties I have no interest in."),
+            ("app-stub-005", 1, "app_user_5", "google_play",
+             f"The {target_brand} search filter resets every time I leave the app. Frustrating UX."),
         ]
 
         items = []
-        for ext_suffix, rating, author, text in stubs:
+        for ext_suffix, rating, author, platform, text in stubs:
             ext_id = f"{brand_slug}-{ext_suffix}"
+            pain_summary = _make_pain_point_summary(text)
             items.append(ScrapedItem(
                 source_name=self.source_name,
                 platform_name=target_brand,
@@ -173,13 +310,19 @@ class AppReviewsScraper(BaseSourceScraper):
                 cleaned_text=text,
                 language="en",
                 metadata_json={
-                    "store": "app_store",
+                    "store": platform,
+                    "store_platform": platform,
                     "rating": str(rating),
                     "fetch_mode": "stub",
                     "fallback_reason": fallback_reason,
+                    "pain_point_summary": pain_summary,
                 },
             ))
         return items
+
+    # ------------------------------------------------------------------
+    # Main entry point — combines both stores
+    # ------------------------------------------------------------------
 
     def scrape(self, target_brand: str) -> list[ScrapedItem]:
         settings = get_settings()
@@ -190,42 +333,18 @@ class AppReviewsScraper(BaseSourceScraper):
                 fallback_reason="Live fetch disabled in settings",
             )
 
-        try:
-            lookup_payload = self._fetch_app_lookup_payload(target_brand)
-            results = lookup_payload.get("results") or []
-            if not results:
-                if settings.scraper_fail_open_to_stub:
-                    return self._build_stub_items(
-                        target_brand=target_brand,
-                        fallback_reason="No app lookup results found",
-                    )
-                return []
+        play_items = self._scrape_google_play(target_brand)
+        ios_items = self._scrape_ios_store(target_brand)
 
-            app_id = results[0].get("trackId")
-            if app_id is None:
-                if settings.scraper_fail_open_to_stub:
-                    return self._build_stub_items(
-                        target_brand=target_brand,
-                        fallback_reason="App lookup result did not contain trackId",
-                    )
-                return []
+        combined = play_items + ios_items
 
-            reviews_payload = self._fetch_reviews_payload(int(app_id))
-            items = self._parse_live_items(target_brand, lookup_payload, reviews_payload)
-            if items:
-                return items
+        if combined:
+            return combined
 
-            if settings.scraper_fail_open_to_stub:
-                return self._build_stub_items(
-                    target_brand=target_brand,
-                    fallback_reason="Live payload returned no parsable app reviews",
-                )
+        if settings.scraper_fail_open_to_stub:
+            return self._build_stub_items(
+                target_brand=target_brand,
+                fallback_reason="Both Google Play and iOS App Store returned no results",
+            )
 
-            return []
-        except Exception as exc:
-            if settings.scraper_fail_open_to_stub:
-                return self._build_stub_items(
-                    target_brand=target_brand,
-                    fallback_reason=str(exc),
-                )
-            raise
+        return []

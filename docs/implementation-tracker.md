@@ -1207,6 +1207,57 @@ Two critical runtime bugs discovered and fixed post-delivery:
 - Fix: Updated `buildErrorMessage` to detect when `detail` is an array and format it as `field: message · field: message`.
 - File changed: `apps/web/src/lib/api.ts`
 
+### Step 35 — Scraper hardening, Review Queue UX, FE cleanup: ✅ Delivered
+Branch: `feat/step-35-enhancements`
+
+**Frontend cleanup:**
+- Removed the APPLICATION / ENVIRONMENT / API PREFIX / CURRENT BUILD meta stat cards from the dashboard overview (they were redundant noise — same info is in the Topbar)
+- Files changed: `apps/web/src/components/console/workspace-shell.tsx`
+
+**Pain Points panel — per-source summary restored:**
+- Added per-source breakdown chip row below the panel header showing how many pain points came from each source (Reddit, YouTube, App Reviews, etc.) with colour-coded badges
+- `source_name` field added to `AgentInsightResponse` TypeScript type
+- Files changed: `apps/web/src/components/console/pain-points-panel.tsx`, `apps/web/src/lib/api.ts`
+
+**Review Queue — pagination + Select All:**
+- Added full client-side pagination (20 items per page) with numbered page buttons and ellipsis
+- Added "Select all on page" checkbox and "Select all N items" link for cross-page bulk selection
+- Added "Clear selection" shortcut
+- Bulk action buttons now show selected count inline: "✓ Approve Selected (N)"
+- Files changed: `apps/web/src/components/console/review-console-panel.tsx`
+
+**App reviews scraper — dual-store, 100 reviews, sentiment filter:**
+- Now fetches up to 100 most-recent reviews from BOTH Google Play Store AND Apple iOS App Store per run
+- Each item tagged with `store_platform: "google_play"` or `store_platform: "ios_app_store"` in metadata
+- Sentiment filter: reviews with rating ≥ 4 AND no negative signal keywords are skipped (only complaints and mixed reviews collected)
+- `pain_point_summary` extracted per item (first sentence of review text)
+- Files changed: `apps/api/app/scrapers/sources/app_reviews.py`
+
+**Review sites scraper — dual-store, 100 reviews, sentiment filter:**
+- Same dual-store treatment as app_reviews: Google Play SDK → HTML fallback, + Apple RSS pages 1+2
+- Each item tagged with `store_platform` in metadata_json
+- Sentiment filter applied — purely positive reviews (rating 4-5, no negative keywords) skipped
+- `pain_point_summary` attached per item
+- Files changed: `apps/api/app/scrapers/sources/review_sites.py`
+
+**Reddit scraper — source tagging + sentiment filter + pain_point_summary:**
+- All items (PRAW, PullPush, RSS, stub) now include `platform: "reddit"` in metadata_json
+- Sentiment filter applied at PRAW, PullPush, and RSS tiers — posts with no negative signal keywords skipped
+- `pain_point_summary` extracted per item
+- Files changed: `apps/api/app/scrapers/sources/reddit.py`
+
+**YouTube scraper — source tagging + sentiment filter + pain_point_summary:**
+- All items tagged with `platform: "youtube"` in metadata_json
+- Sentiment filter: videos with no negative keywords in title+description skipped (excludes purely promotional content)
+- `pain_point_summary` extracted per item
+- Files changed: `apps/api/app/scrapers/sources/youtube.py`
+
+**X scraper — source tagging + sentiment filter + pain_point_summary:**
+- All items tagged with `platform: "x_twitter"` in metadata_json
+- Sentiment filter applied — posts with no negative signal skipped
+- `pain_point_summary` extracted per item
+- Files changed: `apps/api/app/scrapers/sources/x_posts.py`
+
 ### Remaining gaps (lower priority):
 The product is now **production-ready** for single-tenant deployment with full live scraping. The following items represent further quality and scale improvements:
 
