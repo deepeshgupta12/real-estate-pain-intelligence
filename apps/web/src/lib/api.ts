@@ -639,7 +639,9 @@ export async function fetchExportJobs(runId: number): Promise<ExportJobResponse[
 }
 
 export function getExportDownloadUrl(exportJobId: number): string {
-  return `/api/v1/exports/download/${exportJobId}`;
+  // Must be an absolute URL pointing at the FastAPI backend.
+  // A relative /api/... path would hit Next.js, which has no such route → 404.
+  return `${API_BASE_URL}/api/v1/exports/download/${exportJobId}`;
 }
 
 export async function fetchRunEvents(params?: {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { RunEventResponse } from "@/lib/api";
 import { SectionShell } from "@/components/console/section-shell";
 
@@ -24,11 +24,10 @@ function getEventLabel(eventType: string | null | undefined): string {
   return eventType ?? "Unknown event";
 }
 
-function formatTime(timestamp: string | null | undefined): string {
+function formatTime(timestamp: string | null | undefined, now: Date): string {
   if (!timestamp) return "Unknown";
   try {
     const date = new Date(timestamp);
-    const now = new Date();
     const diffMinutes = Math.floor((now.getTime() - date.getTime()) / 1000 / 60);
 
     if (diffMinutes < 1) return "just now";
@@ -42,6 +41,17 @@ function formatTime(timestamp: string | null | undefined): string {
 
 export function RunEventsPanel({ initialEvents }: RunEventsPanelProps) {
   const [events] = useState<RunEventResponse[]>(initialEvents);
+  // `now` is undefined during SSR and set on the client after mount.
+  // This prevents a hydration mismatch caused by relative-time strings
+  // ("32m ago" on server vs "31m ago" on client) differing by a second.
+  const [now, setNow] = useState<Date | undefined>(undefined);
+
+  useEffect(() => {
+    setNow(new Date());
+    // Refresh relative times every 60 seconds
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   if (events.length === 0) {
     return (
@@ -70,7 +80,9 @@ export function RunEventsPanel({ initialEvents }: RunEventsPanelProps) {
           {events.map((event, index) => {
             const icon = getEventIcon(event.event_type);
             const label = getEventLabel(event.event_type);
-            const time = formatTime(event.created_at);
+            // `now` is undefined during SSR — render a stable placeholder to avoid
+            // hydration mismatch, then swap to the real relative time on the client.
+            const time = now ? formatTime(event.created_at, now) : "…";
 
             return (
               <div key={index} className="flex gap-4 pb-4 border-b border-slate-200 last:border-b-0 last:pb-0">
