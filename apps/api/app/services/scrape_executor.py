@@ -16,7 +16,7 @@ from app.services.orchestrator import OrchestratorService
 _module_logger = logging.getLogger(__name__)
 
 # Directory where per-run log files are written.  Created on first use.
-_LOGS_DIR = Path(__file__).resolve().parents[3] / "logs"
+_LOGS_DIR = Path(__file__).resolve().parents[2] / "logs"
 
 
 def _get_run_logger(run_id: int) -> tuple[logging.Logger, logging.FileHandler]:
@@ -43,38 +43,24 @@ def _get_run_logger(run_id: int) -> tuple[logging.Logger, logging.FileHandler]:
         )
         run_logger.addHandler(fh)
 
-    # Also wire root scraper loggers to this file for the duration of this run
-    for name in [
-        "app.scrapers.sources.app_reviews",
-        "app.scrapers.sources.review_sites",
-        "app.scrapers.sources.reddit",
-        "app.scrapers.sources.youtube",
-        "app.scrapers.sources.x_posts",
-        "app.scrapers",
-        __name__,
-    ]:
-        scraper_logger = logging.getLogger(name)
+    # Wire the file handler only to the common ancestor loggers to avoid duplicate
+    # lines caused by propagation.  Individual child loggers (e.g. app.scrapers.sources.*)
+    # inherit from "app" via normal propagation, so adding the handler once at the
+    # "app" level is sufficient.  We also attach it to the run-specific logger itself.
+    for name in ["app", f"scrape_run.{run_id}"]:
+        lg = logging.getLogger(name)
         if not any(
             isinstance(h, logging.FileHandler) and getattr(h, "baseFilename", None) == str(log_path)
-            for h in scraper_logger.handlers
+            for h in lg.handlers
         ):
-            scraper_logger.addHandler(fh)
+            lg.addHandler(fh)
 
     return run_logger, fh
 
 
 def _teardown_run_logger(run_id: int, fh: logging.FileHandler) -> None:
-    """Close and detach the file handler from all loggers wired to this run."""
-    for name in [
-        "app.scrapers.sources.app_reviews",
-        "app.scrapers.sources.review_sites",
-        "app.scrapers.sources.reddit",
-        "app.scrapers.sources.youtube",
-        "app.scrapers.sources.x_posts",
-        "app.scrapers",
-        f"scrape_run.{run_id}",
-        __name__,
-    ]:
+    """Close and detach the file handler from the loggers wired to this run."""
+    for name in ["app", f"scrape_run.{run_id}"]:
         lg = logging.getLogger(name)
         if fh in lg.handlers:
             lg.removeHandler(fh)

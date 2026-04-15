@@ -148,12 +148,16 @@ class AppReviewsScraper(BaseSourceScraper):
             )
             logger.info("Google Play SDK: fetched %d raw reviews for '%s' app_id=%s", len(result), target_brand, app_id)
             items: list[ScrapedItem] = []
+            skipped_positive = 0
+            skipped_empty = 0
             for r in result:
                 text = normalize_whitespace((r.get("content") or "").strip())
                 if not text:
+                    skipped_empty += 1
                     continue
                 rating = r.get("score")
                 if not _has_negative_signal(text, rating):
+                    skipped_positive += 1
                     continue  # skip purely positive reviews
 
                 review_id = str(r.get("reviewId") or r.get("userName") or f"gplay-{len(items)}")
@@ -194,7 +198,10 @@ class AppReviewsScraper(BaseSourceScraper):
                         "pain_point_summary": pain_summary,
                     },
                 ))
-            logger.info("Google Play SDK: %d negative-signal reviews kept for '%s'", len(items), target_brand)
+            logger.info(
+                "Google Play SDK: %d kept / %d raw (skipped_positive=%d, skipped_empty=%d) for '%s'",
+                len(items), len(result), skipped_positive, skipped_empty, target_brand,
+            )
             return items
         except ImportError:
             logger.warning("google_play_scraper not installed — skipping Google Play SDK tier for '%s'", target_brand)
@@ -221,11 +228,16 @@ class AppReviewsScraper(BaseSourceScraper):
         for page in range(1, 3):
             try:
                 url = f"https://itunes.apple.com/rss/customerreviews/page={page}/id={app_id}/sortby=mostrecent/json"
+                logger.debug("Apple App Store: fetching page %d — %s", page, url)
                 payload = RetryingHttpClient.get_json(url, params={"l": "en", "cc": "in"})
                 feed = payload.get("feed") or {}
                 entries = feed.get("entry") or []
                 if isinstance(entries, dict):
                     entries = [entries]
+
+                page_raw = len(entries)
+                page_kept = 0
+                logger.info("Apple App Store: page %d — %d raw entries for '%s' app_id=%s", page, page_raw, target_brand, app_id)
 
                 for entry in entries:
                     content = (entry.get("content") or {}).get("label") or ""
@@ -243,6 +255,7 @@ class AppReviewsScraper(BaseSourceScraper):
                     if not _has_negative_signal(text, rating):
                         continue  # skip purely positive reviews
 
+                    page_kept += 1
                     review_id = (entry.get("id") or {}).get("label") or f"apple-{len(items)}"
                     author = ((entry.get("author") or {}).get("name") or {}).get("label")
                     pain_summary = _make_pain_point_summary(text)
@@ -282,11 +295,15 @@ class AppReviewsScraper(BaseSourceScraper):
                             "pain_point_summary": pain_summary,
                         },
                     ))
+                logger.info(
+                    "Apple App Store: page %d — kept %d / %d (skipped_positive=%d) for '%s'",
+                    page, page_kept, page_raw, page_raw - page_kept, target_brand,
+                )
             except Exception as exc:
                 logger.warning("Apple App Store page %d failed for '%s': %s", page, target_brand, exc)
                 break  # stop if a page fails
 
-        logger.info("Apple App Store: %d negative-signal reviews for '%s'", len(items), target_brand)
+        logger.info("Apple App Store: %d negative-signal reviews total for '%s'", len(items), target_brand)
         return items
 
     # ------------------------------------------------------------------

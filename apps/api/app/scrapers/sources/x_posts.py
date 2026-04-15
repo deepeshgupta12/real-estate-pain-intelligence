@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 
 from app.core.config import get_settings
@@ -35,6 +36,9 @@ def _make_pain_point_summary(text: str, max_chars: int = 140) -> str:
     return text[:max_chars].rstrip() + ("…" if len(text) > max_chars else "")
 
 
+logger = logging.getLogger(__name__)
+
+
 class XPostsScraper(BaseSourceScraper):
     # NOTE: This scraper is backed by HackerNews Algolia API (hn.algolia.com),
     # NOT Twitter/X. The source key "x" is preserved for DB backward-compat.
@@ -43,7 +47,12 @@ class XPostsScraper(BaseSourceScraper):
     parser_version = "x-hn-algolia-v3"
 
     def _build_query(self, target_brand: str, context: str | None = None) -> str:
-        base = f'"{target_brand}" real estate complaint'
+        # NOTE: Do NOT use exact-match quotes around brand names (e.g. '"Square Yards"').
+        # HN Algolia performs exact-phrase matching and returns 0 hits for Indian real-estate
+        # brands that aren't discussed by name on Hacker News.  A broader query without quotes
+        # picks up tangentially related discussions (proptech, real estate fraud, etc.) that
+        # still pass the downstream sentiment filter.
+        base = f"{target_brand} real estate"
         if context:
             from app.scrapers.context_utils import extract_context_keywords as _ekw
             kws = _ekw(context)[:3]
@@ -75,7 +84,10 @@ class XPostsScraper(BaseSourceScraper):
         source_query = self._build_query(target_brand, context)
         hits = payload.get("hits") or []
 
+        logger.info("HN Algolia: %d raw hits for query '%s'", len(hits), source_query)
         parsed_items: list[ScrapedItem] = []
+        skipped_empty = 0
+        skipped_positive = 0
 
         for hit in hits:
             external_id = hit.get("objectID")
@@ -83,10 +95,12 @@ class XPostsScraper(BaseSourceScraper):
             story_text = hit.get("story_text") or ""
             raw_text = normalize_whitespace(" ".join(part for part in [title, story_text] if part))
             if not raw_text:
+                skipped_empty += 1
                 continue
 
             # Sentiment filter — skip purely positive posts
             if not _has_negative_signal(raw_text):
+                skipped_positive += 1
                 continue
 
             source_url = hit.get("url") or hit.get("story_url")
@@ -140,6 +154,10 @@ class XPostsScraper(BaseSourceScraper):
                 )
             )
 
+        logger.info(
+            "HN Algolia: %d kept / %d raw (skipped_positive=%d, skipped_empty=%d) for '%s'",
+            len(parsed_items), len(hits), skipped_positive, skipped_empty, target_brand,
+        )
         return parsed_items
 
     def _build_stub_items(self, target_brand: str, fallback_reason: str | None = None) -> list[ScrapedItem]:
