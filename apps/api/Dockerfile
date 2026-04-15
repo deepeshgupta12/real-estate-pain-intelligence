@@ -1,40 +1,28 @@
 # ── Stage 1: Build dependencies ──────────────────────────────────────────────
-# Pin to bookworm (Debian stable). python:3.11-slim now resolves to trixie
-# (Debian testing) whose apt mirrors are unreliable inside Docker builds.
-FROM python:3.11-slim-bookworm AS builder
+# Use the full python:3.11 image for the builder — it already ships with
+# gcc, build-essential, and libpq-dev, so zero apt-get calls are needed.
+# This avoids the deb.debian.org connectivity failures seen in slim builds.
+FROM python:3.11 AS builder
 
 WORKDIR /build
-
-# Install build tools — use --fix-missing and retry to handle transient apt failures
-RUN apt-get update --fix-missing && apt-get install -y --no-install-recommends \
-    build-essential libpq-dev gcc curl \
-    && rm -rf /var/lib/apt/lists/* \
-    || (sleep 5 && apt-get update --fix-missing && apt-get install -y --no-install-recommends \
-        build-essential libpq-dev gcc curl \
-        && rm -rf /var/lib/apt/lists/*)
 
 # Copy dependency file
 COPY pyproject.toml ./
 
-# Install dependencies into a prefix
+# Install dependencies into an isolated prefix so we can copy them cleanly
 RUN pip install --upgrade pip \
     && pip install --prefix=/install --no-warn-script-location .
 
 # ── Stage 2: Runtime image ────────────────────────────────────────────────────
-FROM python:3.11-slim-bookworm AS runtime
+# python:3.11-slim for a lean runtime image.
+# psycopg[binary] bundles its own libpq, so no apt-get install needed.
+# The healthcheck uses Python's built-in urllib — no curl dependency.
+FROM python:3.11-slim AS runtime
 
 # Non-root user for security
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
 WORKDIR /app
-
-# Runtime system deps only — with retry on transient network failure
-RUN apt-get update --fix-missing && apt-get install -y --no-install-recommends \
-    libpq5 curl \
-    && rm -rf /var/lib/apt/lists/* \
-    || (sleep 5 && apt-get update --fix-missing && apt-get install -y --no-install-recommends \
-        libpq5 curl \
-        && rm -rf /var/lib/apt/lists/*)
 
 # Copy installed packages from builder
 COPY --from=builder /install /usr/local
@@ -44,9 +32,9 @@ COPY --chown=appuser:appuser . .
 
 USER appuser
 
-# Health check
+# Health check — uses Python stdlib, no curl needed
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD python -c "import urllib.request, sys; urllib.request.urlopen('http://localhost:8000/health'); sys.exit(0)" || exit 1
 
 EXPOSE 8000
 
