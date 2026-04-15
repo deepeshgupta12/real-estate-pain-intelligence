@@ -1538,3 +1538,40 @@ Branch: `feat/step-37-bug-fixes-enhancements` (hotfix commit on same branch)
 - Migration 0021 is backward-compatible: `archived_at` is nullable, existing rows unaffected
 - Post-deploy: explicit `model_validate()` in both paginated list endpoints confirmed to fix 500 errors
 - Run log files: `logs/` directory is auto-created; `logs/run_1.log` etc. written on each scrape execution
+
+#### Runtime Fix 3 — Logger dedup + scraper accuracy fixes (identified from real run logs)
+
+**1. Duplicate log lines in run log files**
+- Root cause: `_get_run_logger()` was adding the `FileHandler` to BOTH individual child loggers (e.g. `app.scrapers.sources.app_reviews`) AND their parent `app.scrapers`; Python's log propagation caused each line to be written twice
+- Fixed: handler now added only to the common ancestor logger `"app"` and the run-specific logger `f"scrape_run.{run_id}"` — child loggers propagate naturally with no duplicates
+- File: `apps/api/app/services/scrape_executor.py`
+
+**2. Wrong log file directory (`apps/logs/` instead of `apps/api/logs/`)**
+- Root cause: `Path(__file__).resolve().parents[3]` where `__file__` is `apps/api/app/services/scrape_executor.py` — parents[3] resolves to `apps/` not `apps/api/`
+- Fixed: changed to `parents[2]` so logs write to `apps/api/logs/run_{id}.log`
+- File: `apps/api/app/services/scrape_executor.py`
+
+**3. `google-play-scraper` not installed in venv**
+- Root cause: SDK is listed in `pyproject.toml` dependencies but was not installed in the local venv
+- Fix: run `pip install google-play-scraper` (or `pip install -e .`) in `apps/api/`
+- The `ImportError` is now logged as a `logger.warning()` rather than silently returning `[]`
+- File: `apps/api/app/scrapers/sources/app_reviews.py`
+
+**4. HackerNews Algolia query too narrow (0 results)**
+- Root cause: query was `'"Square Yards" real estate complaint'` — exact-phrase quoting returns 0 hits for Indian brands that are not discussed by name on HN
+- Fixed: removed exact-match quotes; new query is `f"{target_brand} real estate"` (+ context keywords if set) — broad enough to return tangentially related proptech/fraud discussions that pass the sentiment filter
+- File: `apps/api/app/scrapers/sources/x_posts.py`
+
+**5. YouTube `maxResults` exceeding API hard cap**
+- Root cause: `scraper_max_items_per_source=500` was passed directly to `maxResults` — YouTube Data API v3 hard-caps this at 50; values above 50 cause unexpected behaviour
+- Fixed: `maxResults = min(settings.scraper_max_items_per_source, 50)` applied before the API call
+- File: `apps/api/app/scrapers/sources/youtube.py`
+
+**6. Pre-filter logging added throughout scraper pipeline**
+- `app_reviews.py` — logs raw count per Google Play SDK fetch and per Apple RSS page, plus kept/skipped_positive/skipped_empty breakdown after sentiment filter
+- `x_posts.py` (HN Algolia) — logs raw hit count from API + kept/skipped breakdown
+- `youtube.py` — logs raw API result count before filter + kept/skipped breakdown for both Data API and yt-dlp tiers; also logs the exact query and maxResults sent to the API
+- Enables fast diagnosis from the run log file: you can immediately see whether 0 items is due to no API results, all-positive sentiment filter, or import failures
+
+**Action required (user):**
+- Run `cd apps/api && pip install google-play-scraper` (or `pip install -e .` to sync all deps from pyproject.toml)

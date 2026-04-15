@@ -107,6 +107,15 @@ class YouTubeScraper(BaseSourceScraper):
         source_query = self._build_query(target_brand, context)
         search_q = self._build_search_query(target_brand, context)
 
+        # YouTube Data API v3 caps maxResults at 50. Passing any value > 50 results in
+        # an API error (400) or silently returns fewer results.  Cap defensively here.
+        max_results = min(settings.scraper_max_items_per_source, 50)
+
+        logger.info(
+            "YouTube Data API: querying '%s' (maxResults=%d, query=%r)",
+            target_brand, max_results, search_q,
+        )
+
         try:
             payload = RetryingHttpClient.get_json(
                 f"{settings.youtube_data_api_base_url}/search",
@@ -114,7 +123,7 @@ class YouTubeScraper(BaseSourceScraper):
                     "part": "snippet",
                     "q": search_q,
                     "type": "video",
-                    "maxResults": settings.scraper_max_items_per_source,
+                    "maxResults": max_results,
                     "relevanceLanguage": "en",
                     "regionCode": "IN",
                     "key": settings.youtube_data_api_key,
@@ -126,11 +135,14 @@ class YouTubeScraper(BaseSourceScraper):
             return []
 
         items_data = payload.get("items") or []
+        logger.info("YouTube Data API: %d raw results for '%s'", len(items_data), target_brand)
         if not items_data:
             logger.warning("YouTube Data API returned 0 results for '%s'", target_brand)
             return []
 
         items: list[ScrapedItem] = []
+        skipped_empty = 0
+        skipped_positive = 0
 
         for entry in items_data:
             video_id = (entry.get("id") or {}).get("videoId", "")
@@ -143,10 +155,12 @@ class YouTubeScraper(BaseSourceScraper):
 
             combined = "\n\n".join(p for p in [title, description] if p).strip()
             if not combined:
+                skipped_empty += 1
                 continue
 
             # Sentiment filter — skip purely positive videos
             if not _has_negative_signal(combined):
+                skipped_positive += 1
                 continue
 
             source_url = f"https://www.youtube.com/watch?v={video_id}" if video_id else None
@@ -201,7 +215,8 @@ class YouTubeScraper(BaseSourceScraper):
             ))
 
         logger.info(
-            "YouTube Data API: fetched %d videos for '%s'", len(items), target_brand
+            "YouTube Data API: %d kept / %d raw (skipped_positive=%d, skipped_empty=%d) for '%s'",
+            len(items), len(items_data), skipped_positive, skipped_empty, target_brand,
         )
         return items
 
@@ -246,7 +261,9 @@ class YouTubeScraper(BaseSourceScraper):
             return []
 
         entries = (info or {}).get("entries") or []
+        logger.info("yt-dlp: %d raw entries for '%s'", len(entries), target_brand)
         items: list[ScrapedItem] = []
+        ytdlp_skipped = 0
 
         for entry in entries:
             if not isinstance(entry, dict):
@@ -272,10 +289,12 @@ class YouTubeScraper(BaseSourceScraper):
 
             combined = "\n\n".join(p for p in [title, description] if p).strip()
             if not combined:
+                ytdlp_skipped += 1
                 continue
 
             # Sentiment filter
             if not _has_negative_signal(combined):
+                ytdlp_skipped += 1
                 continue
 
             ext_id = f"yt-{video_id}" if video_id else None
@@ -317,7 +336,10 @@ class YouTubeScraper(BaseSourceScraper):
                 },
             ))
 
-        logger.info("yt-dlp: found %d videos for '%s'", len(items), target_brand)
+        logger.info(
+            "yt-dlp: %d kept / %d raw (skipped=%d) for '%s'",
+            len(items), len(entries), ytdlp_skipped, target_brand,
+        )
         return items
 
     # ------------------------------------------------------------------
