@@ -15,6 +15,11 @@ COPY app/ ./app/
 RUN pip install --upgrade pip \
     && pip install --prefix=/install --no-warn-script-location .
 
+# app-store-scraper pins requests==2.23.0 which conflicts with sentry-sdk's
+# urllib3 requirement. Install it WITHOUT its dependencies — requests is
+# already present at a compatible newer version from the main install above.
+RUN pip install --prefix=/install --no-deps app-store-scraper==0.3.5
+
 # ── Stage 2: Runtime image ────────────────────────────────────────────────────
 # python:3.11-slim for a lean runtime image.
 # psycopg[binary] bundles its own libpq, so no apt-get install needed.
