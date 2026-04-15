@@ -5,6 +5,8 @@ import { fetchRunInsights, type AgentInsightResponse } from "@/lib/api";
 
 type PainPointsPanelProps = {
   runId: number | null;
+  /** Increment this to force a re-fetch (e.g. after the Analyze step completes). */
+  insightRefreshKey?: number;
 };
 
 const PRIORITY_STYLES: Record<string, string> = {
@@ -68,7 +70,7 @@ function humanizeLabel(label: string | null): string {
   return label.replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function PainPointsPanel({ runId }: PainPointsPanelProps) {
+export function PainPointsPanel({ runId, insightRefreshKey = 0 }: PainPointsPanelProps) {
   const [insights, setInsights] = useState<AgentInsightResponse[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -81,7 +83,10 @@ export function PainPointsPanel({ runId }: PainPointsPanelProps) {
       .then(setInsights)
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load insights"))
       .finally(() => setLoading(false));
-  }, [runId]);
+  // insightRefreshKey is intentionally included so the panel re-fetches when
+  // the Analyze step completes (runId doesn't change but key increments).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runId, insightRefreshKey]);
 
   if (!runId) {
     return (

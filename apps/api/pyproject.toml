@@ -26,7 +26,8 @@ dependencies = [
   "email-validator>=2.1.0",
   "praw>=7.7.0",
   "google-play-scraper>=1.2.7",
-  "yt-dlp>=2024.1.1"
+  "yt-dlp>=2024.1.1",
+  "sentence-transformers>=2.7.0"
 ]
 
 [project.optional-dependencies]

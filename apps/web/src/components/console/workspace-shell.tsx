@@ -217,6 +217,7 @@ export function WorkspaceShell({
   const [workspaceError, setWorkspaceError] = useState("");
   const [workspaceMessage, setWorkspaceMessage] = useState("");
   const [exportRefreshKey, setExportRefreshKey] = useState(0);
+  const [insightRefreshKey, setInsightRefreshKey] = useState(0);
 
   // Scroll to top on mount so page refresh doesn't restore a mid-page hash position
   useEffect(() => {
@@ -418,6 +419,7 @@ export function WorkspaceShell({
 
       if (action === "generate_insights") {
         await processRunIntelligence(currentRunId);
+        setInsightRefreshKey((k) => k + 1);
         await refreshWorkspace(currentRunId, "Insight generation completed.");
         return;
       }
@@ -651,7 +653,7 @@ export function WorkspaceShell({
             </ErrorBoundary>
 
             <ErrorBoundary label="Pain Points">
-              <PainPointsPanel runId={currentRunId} />
+              <PainPointsPanel runId={currentRunId} insightRefreshKey={insightRefreshKey} />
             </ErrorBoundary>
 
             <ErrorBoundary label="Run Steps">

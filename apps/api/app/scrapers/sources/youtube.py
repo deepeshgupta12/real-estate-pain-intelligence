@@ -87,9 +87,7 @@ class YouTubeScraper(BaseSourceScraper):
         return base
 
     def _build_search_query(self, target_brand: str, context: str | None = None) -> str:
-        # Use complaint/review-focused query to avoid returning brand's own promotional content.
-        # Avoid exact-match quotes on brand name — they limit results unnecessarily.
-        # "complaint review experience" attracts user-generated opinion content.
+        # Primary query — complaint/review-focused to avoid promotional content
         base = f"{target_brand} review complaint experience India"
         if context:
             from app.scrapers.context_utils import extract_context_keywords as _ekw
@@ -97,6 +95,17 @@ class YouTubeScraper(BaseSourceScraper):
             if kws:
                 base = f"{base} {' '.join(kws)}"
         return base
+
+    def _build_search_queries(self, target_brand: str, context: str | None = None) -> list[str]:
+        """Return a diverse set of search queries to maximise recall of negative signals."""
+        primary = self._build_search_query(target_brand, context)
+        return [
+            primary,
+            f"{target_brand} problem issue feedback India",
+            f"{target_brand} scam fraud beware India real estate",
+            f"{target_brand} app not working hidden charges India",
+            f"{target_brand} honest review India property",
+        ]
 
     # ------------------------------------------------------------------
     # Tier 1: YouTube Data API v3 (official — no blocking)
@@ -116,38 +125,53 @@ class YouTubeScraper(BaseSourceScraper):
 
         fetched_at = datetime.now(timezone.utc)
         source_query = self._build_query(target_brand, context)
-        search_q = self._build_search_query(target_brand, context)
+        search_queries = self._build_search_queries(target_brand, context)
 
-        # YouTube Data API v3 caps maxResults at 50. Passing any value > 50 results in
-        # an API error (400) or silently returns fewer results.  Cap defensively here.
-        max_results = min(settings.scraper_max_items_per_source, 50)
+        # YouTube Data API v3 caps maxResults at 50.
+        # With multiple queries we spread the budget: each query fetches up to
+        # max(10, total_budget // num_queries) results.  This is more diverse
+        # and less likely to be dominated by a single brand's own uploads.
+        total_budget = min(settings.scraper_max_items_per_source, 50)
+        per_query_limit = max(10, total_budget // len(search_queries))
 
-        logger.info(
-            "YouTube Data API: querying '%s' (maxResults=%d, query=%r)",
-            target_brand, max_results, search_q,
-        )
+        # Collect raw items_data from all queries, deduplicating by videoId
+        all_items_data: list[dict] = []
+        seen_video_ids: set[str] = set()
 
-        try:
-            payload = RetryingHttpClient.get_json(
-                f"{settings.youtube_data_api_base_url}/search",
-                params={
-                    "part": "snippet",
-                    "q": search_q,
-                    "type": "video",
-                    "maxResults": max_results,
-                    "relevanceLanguage": "en",
-                    "regionCode": "IN",
-                    "key": settings.youtube_data_api_key,
-                },
-                use_browser_headers=False,
+        for search_q in search_queries:
+            logger.info(
+                "YouTube Data API: querying '%s' (maxResults=%d, query=%r)",
+                target_brand, per_query_limit, search_q,
             )
-        except Exception as exc:
-            logger.warning("YouTube Data API search failed for '%s': %s", target_brand, exc)
-            return []
+            try:
+                payload = RetryingHttpClient.get_json(
+                    f"{settings.youtube_data_api_base_url}/search",
+                    params={
+                        "part": "snippet",
+                        "q": search_q,
+                        "type": "video",
+                        "maxResults": per_query_limit,
+                        "relevanceLanguage": "en",
+                        "regionCode": "IN",
+                        "key": settings.youtube_data_api_key,
+                    },
+                    use_browser_headers=False,
+                )
+            except Exception as exc:
+                logger.warning("YouTube Data API search failed for '%s' (query=%r): %s", target_brand, search_q, exc)
+                continue
 
-        items_data = payload.get("items") or []
-        logger.info("YouTube Data API: %d raw results for '%s'", len(items_data), target_brand)
-        if not items_data:
+            for entry in (payload.get("items") or []):
+                vid = (entry.get("id") or {}).get("videoId", "")
+                if vid and vid in seen_video_ids:
+                    continue
+                if vid:
+                    seen_video_ids.add(vid)
+                all_items_data.append(entry)
+
+        logger.info("YouTube Data API: %d unique raw results for '%s' across %d queries",
+                    len(all_items_data), target_brand, len(search_queries))
+        if not all_items_data:
             logger.warning("YouTube Data API returned 0 results for '%s'", target_brand)
             return []
 
@@ -155,7 +179,7 @@ class YouTubeScraper(BaseSourceScraper):
         skipped_empty = 0
         skipped_positive = 0
 
-        for entry in items_data:
+        for entry in all_items_data:
             video_id = (entry.get("id") or {}).get("videoId", "")
             snippet = entry.get("snippet") or {}
 

@@ -20,6 +20,15 @@ RUN pip install --upgrade pip \
 # already present at a compatible newer version from the main install above.
 RUN pip install --prefix=/install --no-deps app-store-scraper==0.3.5
 
+# Pre-download the sentence-transformers model so the container starts without
+# needing outbound internet access at runtime. The model (~90 MB) is cached
+# in /root/.cache/torch/sentence_transformers inside the builder layer and
+# copied to the runtime image below.
+# We use the lightweight multilingual MiniLM model — good balance of quality
+# and size for Indian-language real estate text.
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')" || \
+    echo "sentence-transformers model download failed — will be downloaded at first use"
+
 # ── Stage 2: Runtime image ────────────────────────────────────────────────────
 # python:3.11-slim for a lean runtime image.
 # psycopg[binary] bundles its own libpq, so no apt-get install needed.
@@ -33,6 +42,9 @@ WORKDIR /app
 
 # Copy installed packages from builder
 COPY --from=builder /install /usr/local
+
+# Copy pre-downloaded sentence-transformers model cache (avoids runtime download)
+COPY --from=builder /root/.cache /root/.cache
 
 # Copy application code
 COPY --chown=appuser:appuser . .
