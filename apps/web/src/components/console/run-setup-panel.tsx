@@ -365,12 +365,22 @@ export function RunSetupPanel({
                 const contextLabel = contextMatch ? contextMatch[1] : null;
 
                 return (
-                  <button
+                  // Use div instead of button — Archive button inside makes button-in-button
+                  // which is invalid HTML and causes React hydration errors.
+                  <div
                     key={run.id}
-                    type="button"
-                    onClick={() => onSelectRun(run.id)}
-                    disabled={loading}
-                    className={`w-full rounded-lg border px-4 py-3 text-left transition text-sm ${
+                    role="button"
+                    tabIndex={loading ? -1 : 0}
+                    onClick={() => !loading && onSelectRun(run.id)}
+                    onKeyDown={(e) => {
+                      if (!loading && (e.key === "Enter" || e.key === " ")) {
+                        e.preventDefault();
+                        onSelectRun(run.id);
+                      }
+                    }}
+                    className={`w-full rounded-lg border px-4 py-3 text-left transition text-sm select-none ${
+                      loading ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+                    } ${
                       isActive
                         ? "border-blue-300 bg-blue-50 font-semibold text-slate-900"
                         : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
@@ -416,7 +426,7 @@ export function RunSetupPanel({
                         )}
                       </div>
                     </div>
-                  </button>
+                  </div>
                 );
               })
             )}
