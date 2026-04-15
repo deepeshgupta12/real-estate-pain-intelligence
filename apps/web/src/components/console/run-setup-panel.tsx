@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ScrapeRunCreatePayload, ScrapeRunResponse } from "@/lib/api";
+import { archiveScrapeRun, ScrapeRunCreatePayload, ScrapeRunResponse } from "@/lib/api";
 import { SectionShell } from "@/components/console/section-shell";
 
 type RunSetupPanelProps = {
@@ -152,6 +152,21 @@ export function RunSetupPanel({
   const [selectedContexts, setSelectedContexts] = useState<Set<string>>(new Set());
   const [customContext, setCustomContext] = useState("");
   const [error, setError] = useState("");
+  const [archivingRunId, setArchivingRunId] = useState<number | null>(null);
+
+  async function handleArchive(e: React.MouseEvent, runId: number) {
+    e.stopPropagation(); // don't select the run when clicking archive
+    setArchivingRunId(runId);
+    try {
+      await archiveScrapeRun(runId);
+      // Trigger a page refresh to reflect the archived run being hidden
+      window.location.reload();
+    } catch (err) {
+      console.error("Archive failed:", err);
+    } finally {
+      setArchivingRunId(null);
+    }
+  }
 
   function toggleSource(source: string) {
     setSelectedSources((prev) => {
@@ -384,9 +399,22 @@ export function RunSetupPanel({
                           #{run.id} · {run.status}
                         </p>
                       </div>
-                      {isActive && (
-                        <span className="shrink-0 text-xs font-semibold text-blue-600 mt-0.5">Active</span>
-                      )}
+                      <div className="shrink-0 flex flex-col items-end gap-1">
+                        {isActive && (
+                          <span className="text-xs font-semibold text-blue-600">Active</span>
+                        )}
+                        {!isActive && (
+                          <button
+                            type="button"
+                            onClick={(e) => handleArchive(e, run.id)}
+                            disabled={archivingRunId === run.id}
+                            title="Archive this session"
+                            className="rounded px-1.5 py-0.5 text-[10px] font-medium text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+                          >
+                            {archivingRunId === run.id ? "…" : "Archive"}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </button>
                 );

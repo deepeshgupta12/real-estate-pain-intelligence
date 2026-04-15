@@ -36,8 +36,11 @@ def _make_pain_point_summary(text: str, max_chars: int = 140) -> str:
 
 
 class XPostsScraper(BaseSourceScraper):
+    # NOTE: This scraper is backed by HackerNews Algolia API (hn.algolia.com),
+    # NOT Twitter/X. The source key "x" is preserved for DB backward-compat.
+    # Display label in UI: "Tech Discussions" (relabeled in Step 37).
     source_name = "x"
-    parser_version = "x-alt-v2-live-1"
+    parser_version = "x-hn-algolia-v3"
 
     def _build_query(self, target_brand: str, context: str | None = None) -> str:
         base = f'"{target_brand}" real estate complaint'
@@ -127,7 +130,7 @@ class XPostsScraper(BaseSourceScraper):
                     cleaned_text=raw_text,
                     language="en",
                     metadata_json={
-                        "platform": "x_twitter",
+                        "platform": "tech_discussions_hn",
                         "network": "hn_algolia_fallback",
                         "points": hit.get("points"),
                         "num_comments": hit.get("num_comments"),
@@ -160,7 +163,7 @@ class XPostsScraper(BaseSourceScraper):
         items = []
         for ext_suffix, author, text in stubs:
             ext_id = f"{brand_slug}-{ext_suffix}"
-            source_url = f"https://x.com/{author}/status/{ext_suffix}"
+            source_url = f"https://news.ycombinator.com/item?id={ext_suffix}"
             pain_summary = _make_pain_point_summary(text)
             items.append(ScrapedItem(
                 source_name=self.source_name,
@@ -184,7 +187,7 @@ class XPostsScraper(BaseSourceScraper):
                 cleaned_text=text,
                 language="en",
                 metadata_json={
-                    "platform": "x_twitter",
+                    "platform": "tech_discussions_hn",
                     "network": "public_social_discussion",
                     "fetch_mode": "stub",
                     "fallback_reason": fallback_reason,

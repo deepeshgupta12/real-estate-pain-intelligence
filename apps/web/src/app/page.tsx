@@ -11,7 +11,7 @@ import {
   fetchRunEvents,
   fetchRunReadiness,
   fetchScrapeRun,
-  fetchScrapeRuns,
+  fetchScrapeRunItems,
   fetchSupportedSources,
   type FinalHardeningOverviewResponse,
   type ObservabilityOverviewResponse,
@@ -61,7 +61,7 @@ export default async function Home() {
       fetchObservabilityOverview(),
       fetchQueueHealth(),
       fetchRunEvents({ limit: 20, newestFirst: true }),
-      fetchScrapeRuns(),
+      fetchScrapeRunItems(),
       fetchSupportedSources(),
     ]);
 

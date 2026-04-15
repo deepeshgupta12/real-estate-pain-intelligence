@@ -18,7 +18,7 @@ async def task_execute_scrape(ctx: dict, run_id: int) -> dict[str, Any]:
     logger.info(f"[arq] Starting scrape task for run {run_id}")
     db = SessionLocal()
     try:
-        result = ScrapeExecutionService.execute(db=db, run_id=run_id)
+        result = ScrapeExecutionService.execute_run(db=db, run_id=run_id)
         logger.info(f"[arq] Scrape completed for run {run_id}: {result}")
         return {"status": "completed", "run_id": run_id, "result": str(result)}
     except Exception as exc:
@@ -61,10 +61,31 @@ async def task_multilingual_run(ctx: dict, run_id: int) -> dict[str, Any]:
 async def task_intelligence_run(ctx: dict, run_id: int) -> dict[str, Any]:
     from app.db.session import SessionLocal
     from app.services.intelligence import IntelligenceService
+    from app.services.trending import TrendingService
+    from app.services.topic_modeling import TopicModelingService
+    from app.core.config import get_settings
 
+    settings = get_settings()
     db = SessionLocal()
     try:
-        result = IntelligenceService.generate_insights(db=db, run_id=run_id)
+        result = IntelligenceService.process_run(db=db, run_id=run_id)
+        logger.info(f"[arq] Intelligence completed for run {run_id}")
+
+        # Auto-trigger trending fingerprint update after intelligence
+        try:
+            TrendingService.update_fingerprints_for_run(db=db, run_id=run_id)
+            logger.info(f"[arq] Trending fingerprints updated for run {run_id}")
+        except Exception as trend_exc:
+            logger.warning(f"[arq] Trending update failed (non-fatal) for run {run_id}: {trend_exc}")
+
+        # Auto-trigger topic modeling after intelligence (if enabled)
+        if settings.topic_modeling_enabled:
+            try:
+                TopicModelingService.run_topic_modeling(db=db, run_id=run_id)
+                logger.info(f"[arq] Topic modeling completed for run {run_id}")
+            except Exception as topic_exc:
+                logger.warning(f"[arq] Topic modeling failed (non-fatal) for run {run_id}: {topic_exc}")
+
         return {"status": "completed", "run_id": run_id}
     except Exception as exc:
         logger.error(f"[arq] Intelligence failed for run {run_id}: {exc}")
@@ -94,7 +115,7 @@ async def task_generate_review_queue(ctx: dict, run_id: int) -> dict[str, Any]:
 
     db = SessionLocal()
     try:
-        result = HumanReviewService.generate_queue(db=db, run_id=run_id)
+        result = HumanReviewService.generate_review_queue(db=db, run_id=run_id)
         return {"status": "completed", "run_id": run_id}
     except Exception as exc:
         logger.error(f"[arq] Review queue generation failed for run {run_id}: {exc}")
@@ -109,7 +130,7 @@ async def task_generate_exports(ctx: dict, run_id: int, formats: list[str]) -> d
 
     db = SessionLocal()
     try:
-        result = ExportService.generate_exports(db=db, run_id=run_id, formats=formats)
+        result = ExportService.generate_export_jobs(db=db, run_id=run_id, export_formats=formats)
         return {"status": "completed", "run_id": run_id}
     except Exception as exc:
         logger.error(f"[arq] Export generation failed for run {run_id}: {exc}")

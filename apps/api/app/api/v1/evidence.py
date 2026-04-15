@@ -1,7 +1,7 @@
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -72,22 +72,29 @@ def create_raw_evidence(
     return _hydrate_legacy_evidence_defaults(evidence)
 
 
-@router.get("", response_model=list[RawEvidenceResponse])
+@router.get("", response_model=dict[str, Any])
 def list_raw_evidence(
     run_id: Optional[int] = Query(default=None, description="Filter by scrape run ID"),
     source_name: Optional[str] = Query(default=None, description="Filter by source name"),
     content_type: Optional[str] = Query(default=None, description="Filter by content type"),
-    limit: int = Query(default=100, le=500, description="Maximum number of results"),
+    limit: int = Query(default=100, ge=1, le=500, description="Page size"),
+    offset: int = Query(default=0, ge=0, description="Number of items to skip"),
     db: Session = Depends(get_db),
-) -> list[RawEvidence]:
-    stmt = select(RawEvidence).order_by(RawEvidence.id.desc())
+) -> dict[str, Any]:
+    """List raw evidence items with server-side pagination. Returns items + total count."""
+    base_stmt = select(RawEvidence)
     if run_id is not None:
-        stmt = stmt.where(RawEvidence.scrape_run_id == run_id)
+        base_stmt = base_stmt.where(RawEvidence.scrape_run_id == run_id)
     if source_name is not None:
-        stmt = stmt.where(RawEvidence.source_name == source_name)
+        base_stmt = base_stmt.where(RawEvidence.source_name == source_name)
     if content_type is not None:
-        stmt = stmt.where(RawEvidence.content_type == content_type)
-    stmt = stmt.limit(limit)
+        base_stmt = base_stmt.where(RawEvidence.content_type == content_type)
+
+    total = db.scalar(
+        select(func.count()).select_from(base_stmt.subquery())
+    ) or 0
+
+    stmt = base_stmt.order_by(RawEvidence.id.desc()).limit(limit).offset(offset)
     evidence_items = db.scalars(stmt).all()
 
     updated = False
@@ -99,7 +106,12 @@ def list_raw_evidence(
     if updated:
         db.commit()
 
-    return list(evidence_items)
+    return {
+        "items": list(evidence_items),
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @router.get("/{evidence_id}", response_model=RawEvidenceResponse)

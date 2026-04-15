@@ -60,6 +60,18 @@ def _make_pain_point_summary(text: str, max_chars: int = 140) -> str:
     return text[:max_chars].rstrip() + ("…" if len(text) > max_chars else "")
 
 
+def _matches_context(text: str, context_keywords: list[str]) -> bool:
+    """
+    Post-filter: return True if text matches ANY context keyword, OR if no context given.
+    Store scrapers (Google Play SDK, iTunes RSS) don't support query-based filtering,
+    so we post-filter the result set when a research context is active.
+    """
+    if not context_keywords:
+        return True
+    text_lower = text.lower()
+    return any(kw.lower() in text_lower for kw in context_keywords)
+
+
 # Known Google Play app IDs for Indian real estate brands
 BRAND_PLAY_APP_IDS: dict[str, str] = {
     "square yards":  "com.squareyards.app",
@@ -343,6 +355,23 @@ class AppReviewsScraper(BaseSourceScraper):
         ios_items = self._scrape_ios_store(target_brand, context)
 
         combined = play_items + ios_items
+
+        # Post-filter by context keywords when a research context is active.
+        # Store SDKs don't support query-based filtering, so we apply context
+        # keywords as a post-fetch filter.  When no context is set, all
+        # negative-signal reviews are included.
+        if context and combined:
+            from app.scrapers.context_utils import extract_context_keywords as _ekw
+            ctx_kws = _ekw(context)
+            if ctx_kws:
+                filtered = [
+                    item for item in combined
+                    if _matches_context(item.raw_text or "", ctx_kws)
+                ]
+                # Fall back to unfiltered set if context filter removes everything
+                # (keeps the run useful even with a narrow context)
+                if filtered:
+                    combined = filtered
 
         if combined:
             return combined

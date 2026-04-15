@@ -51,6 +51,9 @@ export type ScrapeRunResponse = {
   started_at: string | null;
   last_heartbeat_at: string | null;
   completed_at: string | null;
+  /** Set when run is archived — null means active */
+  archived_at: string | null;
+  organization_id: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -512,12 +515,42 @@ export async function createScrapeRun(
   });
 }
 
-export async function fetchScrapeRuns(): Promise<ScrapeRunResponse[]> {
-  return fetchJson<ScrapeRunResponse[]>("/api/v1/runs");
+export type PaginatedRunsResponse = {
+  items: ScrapeRunResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export async function fetchScrapeRuns(
+  limit = 50,
+  offset = 0,
+): Promise<PaginatedRunsResponse> {
+  return fetchJson<PaginatedRunsResponse>(
+    `/api/v1/runs?limit=${limit}&offset=${offset}`,
+  );
+}
+
+/** Convenience: fetch all runs (first page). Returns just the items array. */
+export async function fetchScrapeRunItems(limit = 50): Promise<ScrapeRunResponse[]> {
+  const result = await fetchScrapeRuns(limit, 0);
+  return result.items;
 }
 
 export async function fetchScrapeRun(runId: number): Promise<ScrapeRunResponse> {
   return fetchJson<ScrapeRunResponse>(`/api/v1/runs/${runId}`);
+}
+
+export async function archiveScrapeRun(runId: number): Promise<ScrapeRunResponse> {
+  return fetchJson<ScrapeRunResponse>(`/api/v1/runs/${runId}/archive`, {
+    method: "POST",
+  });
+}
+
+export async function unarchiveScrapeRun(runId: number): Promise<ScrapeRunResponse> {
+  return fetchJson<ScrapeRunResponse>(`/api/v1/runs/${runId}/unarchive`, {
+    method: "POST",
+  });
 }
 
 export async function dispatchRun(
@@ -783,20 +816,41 @@ export type RawEvidenceResponse = {
   created_at: string;
 };
 
+export type PaginatedEvidenceResponse = {
+  items: RawEvidenceResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
 export async function fetchEvidence(params?: {
   runId?: number;
   sourceName?: string;
   contentType?: string;
   limit?: number;
-}): Promise<RawEvidenceResponse[]> {
-  return fetchJson<RawEvidenceResponse[]>("/api/v1/evidence", {
+  offset?: number;
+}): Promise<PaginatedEvidenceResponse> {
+  return fetchJson<PaginatedEvidenceResponse>("/api/v1/evidence", {
     query: {
       run_id: params?.runId,
       source_name: params?.sourceName,
       content_type: params?.contentType,
       limit: params?.limit ?? 100,
+      offset: params?.offset ?? 0,
     },
   });
+}
+
+/** Convenience: fetch evidence items array directly. */
+export async function fetchEvidenceItems(params?: {
+  runId?: number;
+  sourceName?: string;
+  contentType?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<RawEvidenceResponse[]> {
+  const result = await fetchEvidence(params);
+  return result.items;
 }
 
 // ---------------------------------------------------------------------------

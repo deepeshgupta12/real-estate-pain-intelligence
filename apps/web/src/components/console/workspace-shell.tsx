@@ -21,6 +21,7 @@ import { ExportsPanel } from "@/components/console/exports-panel";
 import { PainPointsPanel } from "@/components/console/pain-points-panel";
 import { EvidenceExplorerPanel } from "@/components/console/evidence-explorer-panel";
 import { RetrievalSearchPanel } from "@/components/console/retrieval-search-panel";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 import {
   createScrapeRun,
   dispatchRun,
@@ -37,7 +38,7 @@ import {
   fetchRunEvents,
   fetchRunReadiness,
   fetchScrapeRun,
-  fetchScrapeRuns,
+  fetchScrapeRunItems,
   fetchSupportedSources,
   generateExportJobs,
   generateHumanReviewQueue,
@@ -255,7 +256,7 @@ export function WorkspaceShell({
           fetchObservabilityOverview(),
           fetchQueueHealth(),
           fetchRunEvents({ limit: 20, newestFirst: true }),
-          fetchScrapeRuns(),
+          fetchScrapeRunItems(),
           fetchSupportedSources(),
         ]);
 
@@ -623,56 +624,80 @@ export function WorkspaceShell({
           </div>
 
           <div className="mt-8 space-y-8">
-            <RunSetupPanel
-              availableSources={availableSources}
-              runs={runs}
-              currentRunId={currentRunId}
-              loading={workspaceLoading}
-              onCreateRun={handleCreateRun}
-              onSelectRun={handleSelectRun}
-            />
+            <ErrorBoundary label="New Session">
+              <RunSetupPanel
+                availableSources={availableSources}
+                runs={runs}
+                currentRunId={currentRunId}
+                loading={workspaceLoading}
+                onCreateRun={handleCreateRun}
+                onSelectRun={handleSelectRun}
+              />
+            </ErrorBoundary>
 
-            <CurrentRunPanel
-              currentRun={currentRun}
-              readiness={currentReadiness}
-              reviewQueue={reviewQueue}
-            />
+            <ErrorBoundary label="Current Session">
+              <CurrentRunPanel
+                currentRun={currentRun}
+                readiness={currentReadiness}
+                reviewQueue={reviewQueue}
+              />
+            </ErrorBoundary>
 
-            <PipelineProgressPanel
-              currentRun={currentRun}
-              readiness={currentReadiness}
-            />
+            <ErrorBoundary label="Step Progress">
+              <PipelineProgressPanel
+                currentRun={currentRun}
+                readiness={currentReadiness}
+              />
+            </ErrorBoundary>
 
-            <PainPointsPanel runId={currentRunId} />
+            <ErrorBoundary label="Pain Points">
+              <PainPointsPanel runId={currentRunId} />
+            </ErrorBoundary>
 
-            <PipelineActionsPanel
-              currentRunId={currentRunId}
-              actionLoadingKey={actionLoadingKey}
-              onAction={handleAction}
-              lastActionError={workspaceError || undefined}
-            />
+            <ErrorBoundary label="Run Steps">
+              <PipelineActionsPanel
+                currentRunId={currentRunId}
+                actionLoadingKey={actionLoadingKey}
+                onAction={handleAction}
+                lastActionError={workspaceError || undefined}
+              />
+            </ErrorBoundary>
 
-            <ExportsPanel runId={currentRunId} triggerRefresh={exportRefreshKey} />
+            <ErrorBoundary label="Exports">
+              <ExportsPanel runId={currentRunId} triggerRefresh={exportRefreshKey} />
+            </ErrorBoundary>
 
-            <EvidenceExplorerPanel runId={currentRunId} />
+            <ErrorBoundary label="Evidence Explorer">
+              <EvidenceExplorerPanel runId={currentRunId} />
+            </ErrorBoundary>
 
-            <RetrievalSearchPanel runId={currentRunId} />
+            <ErrorBoundary label="Retrieval Search">
+              <RetrievalSearchPanel runId={currentRunId} />
+            </ErrorBoundary>
 
-            <QueueHealthPanel queueItems={queueHealth} />
+            <ErrorBoundary label="Active Sessions">
+              <QueueHealthPanel queueItems={queueHealth} />
+            </ErrorBoundary>
 
-            <RunDiagnosticsPanel
-              initialRunId={currentRunId}
-              initialDiagnostics={currentDiagnostics}
-            />
+            <ErrorBoundary label="Session Details">
+              <RunDiagnosticsPanel
+                initialRunId={currentRunId}
+                initialDiagnostics={currentDiagnostics}
+              />
+            </ErrorBoundary>
 
-            <RunEventsPanel initialEvents={recentEvents} />
+            <ErrorBoundary label="Activity Log">
+              <RunEventsPanel initialEvents={recentEvents} />
+            </ErrorBoundary>
 
-            <ReviewConsolePanel
-              initialRunId={currentRunId}
-              activeRunId={currentRunId}
-              initialSummary={reviewSummary}
-              initialQueue={reviewQueue}
-            />
+            <ErrorBoundary label="Review Queue">
+              <ReviewConsolePanel
+                initialRunId={currentRunId}
+                activeRunId={currentRunId}
+                initialSummary={reviewSummary}
+                initialQueue={reviewQueue}
+              />
+            </ErrorBoundary>
           </div>
         </div>
       </div>
