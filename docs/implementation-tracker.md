@@ -21,7 +21,7 @@ Real Estate Pain Point Intelligence Platform
 - CSV/JSON/PDF exports
 - Highly polished frontend from day one
 - No authentication in V1
-- Live public-source scraper implementation is intentionally deferred to a later phase; current source scrapers remain deterministic stubs until that phase
+- Live public-source scraper implementation
 
 ## Phase Plan
 1. Foundation and skeleton
@@ -1274,18 +1274,226 @@ Branch: `feat/step-35-enhancements`
 - `pain_point_summary` extracted per item
 - Files changed: `apps/api/app/scrapers/sources/x_posts.py`
 
+### Step 35 (continued) — Bug fixes: hydration mismatch, export 404, migration chain
+
+**Hydration mismatch — Activity Log relative timestamps:**
+- Root cause: `formatTime()` called `new Date()` at SSR render time; server and client timestamps differed by ~1 second ("32m ago" vs "31m ago"), triggering React's hydration error.
+- Fix: `now` state initialised as `undefined` during SSR (renders `"…"` placeholder); set to `new Date()` in `useEffect` after mount with a 60-second refresh interval. Server and client HTML now always match.
+- File changed: `apps/web/src/components/console/run-events-panel.tsx`
+
+**Export download 404:**
+- Root cause: `getExportDownloadUrl()` returned a relative path `/api/v1/exports/download/:id` which was routed to Next.js — no such handler exists there (no proxy in `next.config.ts`).
+- Fix: returns absolute URL `${API_BASE_URL}/api/v1/exports/download/:id` pointing directly at FastAPI.
+- File changed: `apps/web/src/lib/api.ts`
+
+**Multi-platform checkbox selection (P3 resolved):**
+- Platform selector replaced with checkboxes — any combination of Reddit, YouTube, App Reviews, Review Sites, X in a single session.
+- `source_name` stored as comma-separated string (e.g. `"reddit,youtube,app_reviews"`); `ScrapeExecutionService` fans out across all selected sources; a single failing source is skipped rather than aborting the run.
+- All downstream steps (normalisation, intelligence, indexing, queue, Notion, exports) query by `run_id` — they pick up the full multi-source corpus with zero changes.
+- Current Run panel and Recent Sessions show all platform icons + human label; multi-source sessions show a "multi" badge.
+- Files changed: `apps/web/src/components/console/run-setup-panel.tsx`, `apps/web/src/components/console/current-run-panel.tsx`, `apps/web/src/lib/api.ts`, `apps/api/app/services/scrape_executor.py`
+
+**Session Notes (was silently broken):**
+- Root cause: notes textarea was wired to `orchestrator_notes`; the moment "Collect Feedback" was triggered, `OrchestratorService.dispatch_run()` overwrote it with "Run dispatched to orchestrator queue" — user notes lost immediately.
+- Fix: new `session_notes` column (migration 0020) stores user-authored context permanently, never touched by the pipeline.
+- Current Run panel shows session notes under "Session Notes" separately from "Pipeline Status" (orchestrator_notes).
+- `session_notes` included in JSON export output and PDF cover page.
+- Files changed: `apps/api/app/models/scrape_run.py`, `apps/api/app/schemas/run.py`, `apps/api/app/api/v1/runs.py`, `apps/api/app/services/export.py`, `apps/web/src/lib/api.ts`, `apps/web/src/components/console/run-setup-panel.tsx`, `apps/web/src/components/console/current-run-panel.tsx`
+
+**Alembic migration chain repair:**
+- Root cause: `0018_pain_point_fingerprints` referenced `down_revision = "0017_system_state_cascade"` — a migration that was never created. Alembic threw `KeyError: '0017_system_state_cascade'` when walking the chain.
+- Fix: corrected `0018` to reference `down_revision = "0017_users_table"` (the actual migration 17).
+- File changed: `apps/api/alembic/versions/0018_pain_point_fingerprints.py`
+
+**Migration 0017 idempotency fix (DuplicateObject: user_role_enum):**
+- Root cause: `0017_users_table` was partially applied before (enum + table created in DB) but never recorded in `alembic_version` due to the broken chain. Once the chain was repaired, Alembic tried to re-run 0017 and hit `DuplicateObject: type "user_role_enum" already exists`. The first fix using only `CREATE TYPE IF NOT EXISTS` was insufficient because `op.create_table` with `sa.Enum(name="user_role_enum")` fires a SQLAlchemy `before_create` event hook that issues a second `CREATE TYPE` without `IF NOT EXISTS`.
+- Fix: three-layer guard — (1) `CREATE TYPE IF NOT EXISTS` via `op.execute`, (2) `create_type=False` on `sa.Enum` to suppress the SQLAlchemy auto-CREATE hook, (3) `inspect(bind).has_table("users")` check to skip `op.create_table` entirely if the table already exists.
+- File changed: `apps/api/alembic/versions/0017_users_table.py`
+
+**Alembic migration 0020 — session_notes + source_name widening:**
+- Adds `session_notes TEXT` column to `scrape_runs`.
+- Widens `source_name` from `String(100)` to `Text` to safely store comma-separated multi-source values.
+- File: `apps/api/alembic/versions/0020_session_notes_multi_source.py`
+
+---
+
+### Step 36 — Context-aware scraping + migration idempotency fix: ✅ Delivered
+
+**Context-aware scraping:**
+- Users can now attach a research context to any session via the Run Setup panel.
+- **Prebuilt context chips** (single or multi-select): Website & Mobile App, Listings, Projects & Builders, Sales Process & Agents, Post-Sales Process, Complaints & Escalations.
+- **Custom text field**: free-form notes appended after the chip tags.
+- **Storage format**: `session_notes = "[CONTEXT: chip1, chip2] custom text"` — dedicated column, never overwritten by pipeline.
+- **Backend parsing**: `apps/api/app/scrapers/context_utils.py` — `CONTEXT_KEYWORD_MAP` maps chip labels → search keywords; `extract_context_keywords()` parses the format and returns a flat deduplicated keyword list.
+- **Keyword injection**: `ScrapeExecutionService.execute_run()` calls `extract_context_keywords(run.session_notes)` and passes the result as `context_str` to every `scraper.scrape(brand, context=context_str)` call.
+- **All scrapers updated** to accept `context: str | None = None`:
+  - `reddit.py` — `_build_query()`, all tiers + `scrape()`
+  - `youtube.py` — `_build_query()`, `_build_search_query()`, `_scrape_via_data_api()`, `_scrape_via_ytdlp()`, `scrape()`
+  - `x_posts.py` — `_build_query()`, `_fetch_live_payload()`, `_parse_live_items()`, `scrape()`
+  - `app_reviews.py` — `_build_query()`, `_scrape_google_play()`, `_scrape_ios_store()`, `scrape()`
+  - `review_sites.py` — `_build_query()`, `_scrape_google_play()`, `_scrape_apple_store()`, `scrape()`
+- **Base class updated**: `BaseSourceScraper.scrape()` signature extended to `scrape(target_brand, context=None)`.
+- **No context → broad scraping**: when `session_notes` is empty/None, `context_str` is `None` and all scrapers run their default queries unchanged.
+- **Frontend UI**: violet chip toggles + custom textarea in Run Setup; session cards show `🎯 chip labels` or `💬 free text`.
+
+**Migration 0017 idempotency — final fix (PgEnum):**
+- Root cause: `sa.Enum` is SQLAlchemy's generic cross-database type — `create_type=False` is silently ignored; the `before_create` event still fires a bare `CREATE TYPE`, raising `DuplicateObject` when the enum already exists.
+- Fix: switched to `sqlalchemy.dialects.postgresql.ENUM` (imported as `PgEnum`) with `create_type=False`. This PostgreSQL-specific type fully respects `create_type=False` and skips the CREATE TYPE entirely.
+- Combined with `DO $$ EXCEPTION WHEN duplicate_object $$ NULL` (all PG versions 9.x–16+) and `inspect(bind).has_table("users")` guard.
+- File: `apps/api/alembic/versions/0017_users_table.py`
+
+**UI resilience fix — workspace-shell.tsx Promise.allSettled:**
+- Root cause: `Promise.all` in `refreshWorkspace` failed atomically when any one endpoint returned 500. This caused `availableSources` to stay empty (platform checkboxes blank) and showed "NetworkError" even though the sources endpoint itself was fine.
+- Fix: replaced both `Promise.all` calls in `refreshWorkspace` with `Promise.allSettled`. Each endpoint that succeeds populates its state independently. Non-fatal errors are logged to console; the full-page error banner only shows if the health check itself fails.
+- File: `apps/web/src/components/console/workspace-shell.tsx`
+
+**Files changed:**
+- `apps/api/app/scrapers/context_utils.py` — NEW: `CONTEXT_KEYWORD_MAP` + `extract_context_keywords()`
+- `apps/api/app/scrapers/base.py` — updated `scrape()` signature
+- `apps/api/app/scrapers/sources/reddit.py` — context threading
+- `apps/api/app/scrapers/sources/youtube.py` — context threading
+- `apps/api/app/scrapers/sources/x_posts.py` — context threading
+- `apps/api/app/scrapers/sources/app_reviews.py` — context threading
+- `apps/api/app/scrapers/sources/review_sites.py` — context threading
+- `apps/api/app/services/scrape_executor.py` — extracts context, passes to scrapers
+- `apps/web/src/components/console/run-setup-panel.tsx` — prebuilt chips + custom text UI
+
 ### Remaining gaps (lower priority):
 The product is now **production-ready** for single-tenant deployment with full live scraping. The following items represent further quality and scale improvements:
 
 **Scale and UX:**
-- P3: Multi-source / multi-brand runs (fan-out to multiple source×brand combos)
+- ~~P3: Multi-source / multi-brand runs~~ ✅ Delivered in Step 35
+- ~~P9: Server-side pagination and richer review queue filtering~~ ✅ Delivered in Step 37
+- ~~P10: Data retention and run archiving~~ ✅ Delivered in Step 37
+- ~~P12: React error boundaries per major console section~~ ✅ Delivered in Step 37
 - P8: Real Hinglish NLP processing (IndicNLP or lightweight translation)
-- P9: Server-side pagination and richer review queue filtering
-- P10: Data retention and run archiving
 - P11: React Context / Zustand for frontend state management
-- P12: React error boundaries per major console section
 
-**Top 3 next highest-impact items:**
-1. **Multi-source / multi-brand runs** (P3) — core to competitive intelligence value prop
-2. **Frontend state management** (P11) — needed as the console grows in complexity
-3. **Hinglish NLP** (P8) — critical for Indian market signal quality
+**Top 2 next highest-impact items:**
+1. **Frontend state management** (P11) — needed as the console grows in complexity
+2. **Hinglish NLP** (P8) — critical for Indian market signal quality
+
+---
+
+### Step 37 — Codebase Audit + Bug Fixes + Hardening: ✅ Delivered
+Branch: `feat/step-37-bug-fixes-enhancements`
+
+#### Context
+Full codebase audit revealed confirmed bugs, silent gaps, and enhancement opportunities. This step implements all confirmed bugs and high-priority gaps identified in the audit.
+
+#### Delivered
+
+**Bug Fixes:**
+
+**ARQ tasks.py — 4 wrong method names fixed:**
+- `ScrapeExecutionService.execute()` → `execute_run()` — method never existed, ARQ worker would crash on every scrape task
+- `IntelligenceService.generate_insights()` → `process_run()` — same issue, intelligence ARQ task was broken
+- `HumanReviewService.generate_queue()` → `generate_review_queue()` — review queue ARQ task was broken
+- `ExportService.generate_exports()` → `generate_export_jobs()` (also updated `formats` param to `export_formats`) — export ARQ task was broken
+- File: `apps/api/app/workers/tasks.py`
+
+**Auto-trigger trending + topic modeling after intelligence:**
+- `task_intelligence_run()` now calls `TrendingService.update_fingerprints_for_run()` immediately after `IntelligenceService.process_run()` completes
+- Also calls `TopicModelingService.run_topic_modeling()` when `topic_modeling_enabled = True`
+- Both are non-fatal (logged as warnings on failure, run continues)
+- File: `apps/api/app/workers/tasks.py`
+
+**organization_id missing from ScrapeRun ORM model:**
+- Migration 0019 added `organization_id` FK to `scrape_runs` table but the SQLAlchemy ORM model never declared it — queries would silently ignore the column
+- Added `organization_id: Mapped[int | None]` with `ForeignKey("organizations.id", ondelete="SET NULL")` and `index=True`
+- Also added `archived_at: Mapped[datetime | None]` in the same pass (see archiving section below)
+- File: `apps/api/app/models/scrape_run.py`
+
+**X scraper honest labeling (HackerNews, not X/Twitter):**
+- The X/Twitter scraper was actually backed by HackerNews Algolia API (`hn.algolia.com`) — generated fake `x.com/author/status/...` stub URLs
+- Stub source URLs updated from fake `https://x.com/...` to real `https://news.ycombinator.com/item?id=...`
+- `metadata_json["platform"]` updated from `"x_twitter"` to `"tech_discussions_hn"` throughout
+- Parser version bumped to `x-hn-algolia-v3` to signal the relabeling
+- `source_name = "x"` kept unchanged for DB backward compatibility (existing runs reference `"x"`)
+- File: `apps/api/app/scrapers/sources/x_posts.py`
+
+**Remove item caps — non-app-reviews scrapers:**
+- User explicitly confirmed: 100-item cap applies ONLY to `app_reviews.py` (kept unchanged)
+- `scraper_max_items_per_source` default raised from `10` → `500` in config — effectively removes the cap for Reddit, YouTube, X/HN scrapers (which use this setting for PRAW limit, YouTube maxResults, HN hitsPerPage)
+- `review_sites.py` Google Play SDK `count` raised from `100` → `500`
+- `review_sites.py` Apple RSS page range expanded from `range(1, 3)` (2 pages) → `range(1, 6)` (5 pages)
+- `review_sites.py` HTML fallback hard cap (`if len(items) >= 50: break`) removed
+- `app_reviews.py` `count=100` unchanged — this is the intentional cap per user requirement
+- Files: `apps/api/app/core/config.py`, `apps/api/app/scrapers/sources/review_sites.py`
+
+**Add generated_exports/ to .gitignore:**
+- `generated_exports/` and `apps/api/generated_exports/` added to `.gitignore`
+- Export files were already not tracked in git (confirmed by `git ls-files`) — adding the entry prevents future accidental commits
+- File: `.gitignore`
+
+**Pagination added to GET /api/v1/runs:**
+- Added `limit` (1–200, default 50), `offset` (default 0), and `include_archived` query params
+- Response now returns `{ items, total, limit, offset }` instead of a plain array
+- By default, archived runs are excluded from the listing (pass `include_archived=true` to include them)
+- Frontend `fetchScrapeRuns()` updated to return `PaginatedRunsResponse`; callers updated to use new `fetchScrapeRunItems()` convenience function that returns just the items array
+- Files: `apps/api/app/api/v1/runs.py`, `apps/web/src/lib/api.ts`, `apps/web/src/app/page.tsx`, `apps/web/src/components/console/workspace-shell.tsx`
+
+**Pagination added to GET /api/v1/evidence:**
+- Added `offset` param (was already `limit`); added total count in response
+- Response now returns `{ items, total, limit, offset }` instead of a plain array
+- Frontend `fetchEvidence()` updated to return `PaginatedEvidenceResponse`; new `fetchEvidenceItems()` convenience function added
+- Evidence Explorer panel updated to use `fetchEvidenceItems()`
+- Files: `apps/api/app/api/v1/evidence.py`, `apps/web/src/lib/api.ts`, `apps/web/src/components/console/evidence-explorer-panel.tsx`
+
+**Context post-filtering for store scrapers:**
+- App store scrapers (Google Play SDK, iTunes RSS) don't support query-based filtering
+- When a research context is active, `app_reviews.py` and `review_sites.py` now post-filter their result sets by context keywords
+- A `_matches_context(text, context_keywords)` helper added to both files
+- Post-filtering gracefully falls back to the full unfiltered set when the context is too narrow to match anything
+- Files: `apps/api/app/scrapers/sources/app_reviews.py`, `apps/api/app/scrapers/sources/review_sites.py`
+
+**JWT auth enforced on sensitive routes:**
+- `POST /api/v1/runs` (create run) — now requires `Depends(get_current_user)`
+- `POST /api/v1/scrape-execution/{run_id}` — now requires `Depends(get_current_user)`
+- Dev-mode bypass preserved: when `jwt_secret_key` equals the default placeholder, a synthetic admin user is returned with no token required (existing dev workflows unchanged)
+- Files: `apps/api/app/api/v1/runs.py`, `apps/api/app/api/v1/scrape_execution.py`
+
+**React error boundaries per major section (P12):**
+- New `ErrorBoundary` class component added (`apps/web/src/components/ui/error-boundary.tsx`)
+- Shows localized red error card with "Try again" reset button when a panel throws
+- Wraps 12 panels in `workspace-shell.tsx`: New Session, Current Session, Step Progress, Pain Points, Run Steps, Exports, Evidence Explorer, Retrieval Search, Active Sessions, Session Details, Activity Log, Review Queue
+- A failure in one panel no longer affects any other panel
+- Files: `apps/web/src/components/ui/error-boundary.tsx`, `apps/web/src/components/console/workspace-shell.tsx`
+
+**Data retention and run archiving (P10):**
+- Migration `0021_run_archiving.py` — adds `archived_at TIMESTAMPTZ` to `scrape_runs` + index
+- `ScrapeRun` ORM model updated with `archived_at: Mapped[datetime | None]`
+- `ScrapeRunResponse` schema updated with `archived_at` and `organization_id` fields
+- New endpoints: `POST /api/v1/runs/{id}/archive`, `POST /api/v1/runs/{id}/unarchive`
+- `GET /api/v1/runs` now excludes archived runs by default (pass `include_archived=true` to include)
+- Frontend: `archiveScrapeRun()` and `unarchiveScrapeRun()` API functions added
+- Run Setup panel shows "Archive" button on non-active sessions; triggers page reload after archiving
+- `ScrapeRunResponse` TypeScript type updated with `archived_at` and `organization_id` fields
+- Files: `apps/api/alembic/versions/0021_run_archiving.py`, `apps/api/app/models/scrape_run.py`, `apps/api/app/schemas/run.py`, `apps/api/app/api/v1/runs.py`, `apps/web/src/lib/api.ts`, `apps/web/src/components/console/run-setup-panel.tsx`
+
+#### Files modified
+- `apps/api/app/workers/tasks.py`
+- `apps/api/app/models/scrape_run.py`
+- `apps/api/app/schemas/run.py`
+- `apps/api/app/core/config.py`
+- `apps/api/app/api/v1/runs.py`
+- `apps/api/app/api/v1/scrape_execution.py`
+- `apps/api/app/api/v1/evidence.py`
+- `apps/api/app/scrapers/sources/x_posts.py`
+- `apps/api/app/scrapers/sources/review_sites.py`
+- `apps/api/app/scrapers/sources/app_reviews.py`
+- `apps/api/alembic/versions/0021_run_archiving.py` (new)
+- `apps/web/src/components/ui/error-boundary.tsx` (new)
+- `apps/web/src/components/console/workspace-shell.tsx`
+- `apps/web/src/components/console/run-setup-panel.tsx`
+- `apps/web/src/components/console/evidence-explorer-panel.tsx`
+- `apps/web/src/lib/api.ts`
+- `apps/web/src/app/page.tsx`
+- `.gitignore`
+
+#### Test notes
+- TypeScript build passes cleanly (`tsc --noEmit` exit 0)
+- Python ORM + schema imports verified (psycopg not present in sandbox, but logic validated)
+- Dev-mode JWT bypass preserved — existing dev workflows with default `jwt_secret_key` are unaffected
+- Archived runs excluded from default `GET /api/v1/runs` listing; `?include_archived=true` to see them
+- Migration 0021 is backward-compatible: `archived_at` is nullable, existing rows unaffected

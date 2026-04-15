@@ -75,6 +75,8 @@ class ScrapeRunResponse(BaseModel):
     started_at: datetime | None
     last_heartbeat_at: datetime | None
     completed_at: datetime | None
+    archived_at: datetime | None = None
+    organization_id: int | None = None
     created_at: datetime
     updated_at: datetime
 

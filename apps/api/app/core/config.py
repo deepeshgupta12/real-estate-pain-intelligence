@@ -26,7 +26,9 @@ class Settings(BaseSettings):
     scraper_default_timeout_seconds: float = 10.0
     scraper_max_retries: int = 2
     scraper_retry_backoff_seconds: float = 1.0
-    scraper_max_items_per_source: int = 10
+    # Maximum items to request per non-app-reviews source (reddit, youtube, x, review_sites).
+    # Set high — no artificial cap. app_reviews.py enforces its own 100-item cap separately.
+    scraper_max_items_per_source: int = 500
     scraper_user_agent: str = "repi-bot/0.2 (+https://localhost)"
 
     scraper_reddit_base_url: str = "https://www.reddit.com"

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.models.raw_evidence import RawEvidence
 from app.models.scrape_run import ScrapeRun
+from app.scrapers.context_utils import extract_context_keywords
 from app.scrapers.registry import ScraperRegistry
 from app.scrapers.utils import build_dedupe_key
 from app.services.orchestrator import OrchestratorService
@@ -33,6 +34,11 @@ class ScrapeExecutionService:
         # Parse comma-separated source list (backward-compatible with single-source runs)
         source_names = [s.strip() for s in run.source_name.split(",") if s.strip()]
 
+        # Extract context from session_notes (user-owned field, never touched by pipeline).
+        # If session_notes is blank / None, context_str is None → broad scraping.
+        context_kws = extract_context_keywords(run.session_notes)
+        context_str: str | None = " ".join(context_kws) if context_kws else None
+
         # Collect evidence from every selected source
         all_scraped_items = []
         failed_sources: list[str] = []
@@ -40,7 +46,7 @@ class ScrapeExecutionService:
         for source_name in source_names:
             try:
                 scraper = ScraperRegistry.get_scraper(source_name)
-                items = scraper.scrape(run.target_brand)
+                items = scraper.scrape(run.target_brand, context=context_str)
                 all_scraped_items.extend(items)
             except Exception as exc:
                 # Record failure but continue with remaining sources so a single bad

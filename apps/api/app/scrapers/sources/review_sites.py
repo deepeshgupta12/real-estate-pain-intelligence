@@ -3,8 +3,9 @@ Review sites scraper — fetches from BOTH Google Play Store AND Apple iOS App S
 for the most accurate Indian real estate brand signal.
 
 Strategy:
-  - Up to 100 most-recent reviews from Google Play (SDK, then HTML fallback)
-  - Up to 100 most-recent reviews from Apple App Store (RSS pages 1+2)
+  - All available negative reviews from Google Play (SDK, then HTML fallback)
+  - All available negative reviews from Apple App Store (RSS pages 1–5)
+  - No artificial item cap — collect everything the store API returns
   - Each item tagged with store_platform: "google_play" | "ios_app_store"
   - Sentiment filter: skip reviews that are purely positive
     (rating >= 4 AND no negative signal keywords in text)
@@ -67,6 +68,18 @@ def _make_pain_point_summary(text: str, max_chars: int = 140) -> str:
     return text[:max_chars].rstrip() + ("…" if len(text) > max_chars else "")
 
 
+def _matches_context(text: str, context_keywords: list[str]) -> bool:
+    """
+    Post-filter: return True if text matches ANY context keyword, OR if no keywords given.
+    Store scrapers don't support query-based filtering, so we post-filter the result set
+    when a research context is active.
+    """
+    if not context_keywords:
+        return True
+    text_lower = text.lower()
+    return any(kw.lower() in text_lower for kw in context_keywords)
+
+
 # Known Google Play app IDs for Indian real estate brands
 BRAND_PLAY_APP_IDS: dict[str, str] = {
     "square yards":  "com.squareyards.app",
@@ -93,8 +106,14 @@ class ReviewSitesScraper(BaseSourceScraper):
     source_name = "review_sites"
     parser_version = "review-sites-dual-store-v2"
 
-    def _build_query(self, target_brand: str) -> str:
-        return f"{target_brand} reviews"
+    def _build_query(self, target_brand: str, context: str | None = None) -> str:
+        base = f"{target_brand} reviews"
+        if context:
+            from app.scrapers.context_utils import extract_context_keywords as _ekw
+            kws = _ekw(context)[:3]
+            if kws:
+                base = f'{base} {" ".join(kws)}'
+        return base
 
     def _get_play_app_id(self, target_brand: str) -> str | None:
         brand_lower = target_brand.lower().strip()
@@ -111,17 +130,17 @@ class ReviewSitesScraper(BaseSourceScraper):
         return None
 
     # ------------------------------------------------------------------
-    # Google Play Store — up to 100 most-recent negative reviews
+    # Google Play Store — all available negative reviews (no artificial cap)
     # ------------------------------------------------------------------
 
-    def _scrape_google_play(self, target_brand: str) -> list[ScrapedItem]:
+    def _scrape_google_play(self, target_brand: str, context: str | None = None) -> list[ScrapedItem]:
         app_id = self._get_play_app_id(target_brand)
         if not app_id:
             logger.debug("No Play Store app ID for '%s'", target_brand)
             return []
 
         fetched_at = datetime.now(timezone.utc)
-        source_query = self._build_query(target_brand)
+        source_query = self._build_query(target_brand, context)
         source_url = f"https://play.google.com/store/apps/details?id={app_id}"
 
         try:
@@ -133,7 +152,7 @@ class ReviewSitesScraper(BaseSourceScraper):
                     lang="en",
                     country="in",
                     sort=Sort.NEWEST,
-                    count=100,
+                    count=500,  # fetch as many as SDK allows; no artificial cap
                 )
                 items: list[ScrapedItem] = []
                 for r in result:
@@ -259,27 +278,25 @@ class ReviewSitesScraper(BaseSourceScraper):
                         "pain_point_summary": pain_summary,
                     },
                 ))
-                if len(items) >= 50:
-                    break
             if items:
                 break
         return items
 
     # ------------------------------------------------------------------
-    # Apple iOS App Store — up to 100 most-recent negative reviews (2 pages)
+    # Apple iOS App Store — all available negative reviews (pages 1–5, no cap)
     # ------------------------------------------------------------------
 
-    def _scrape_apple_store(self, target_brand: str) -> list[ScrapedItem]:
+    def _scrape_apple_store(self, target_brand: str, context: str | None = None) -> list[ScrapedItem]:
         app_id = self._get_itunes_app_id(target_brand)
         if not app_id:
             return []
 
         fetched_at = datetime.now(timezone.utc)
-        source_query = self._build_query(target_brand)
+        source_query = self._build_query(target_brand, context)
         source_url = f"https://apps.apple.com/in/app/{app_id}"
         items: list[ScrapedItem] = []
 
-        for page in range(1, 3):
+        for page in range(1, 6):  # pages 1–5; empty page signals end of results
             try:
                 url = f"https://itunes.apple.com/rss/customerreviews/page={page}/id={app_id}/sortby=mostrecent/json"
                 payload = RetryingHttpClient.get_json(url, params={"l": "en", "cc": "in"})
@@ -413,16 +430,32 @@ class ReviewSitesScraper(BaseSourceScraper):
     # Main entry point — combines both stores
     # ------------------------------------------------------------------
 
-    def scrape(self, target_brand: str) -> list[ScrapedItem]:
+    def scrape(self, target_brand: str, context: str | None = None) -> list[ScrapedItem]:
         settings = get_settings()
 
         if not settings.scraper_enable_live_fetch:
             return self._build_stub_items(target_brand, "Live fetch disabled in settings")
 
-        play_items = self._scrape_google_play(target_brand)
-        ios_items = self._scrape_apple_store(target_brand)
+        play_items = self._scrape_google_play(target_brand, context)
+        ios_items = self._scrape_apple_store(target_brand, context)
 
         combined = play_items + ios_items
+
+        # Post-filter by context keywords when a research context is active.
+        # Store SDKs/RSS don't support query-based filtering, so we apply context
+        # keywords as a post-fetch filter.  When no context is set, all
+        # negative-signal reviews are included (no cap).
+        if context and combined:
+            from app.scrapers.context_utils import extract_context_keywords as _ekw
+            ctx_kws = _ekw(context)
+            if ctx_kws:
+                filtered = [
+                    item for item in combined
+                    if _matches_context(item.raw_text or "", ctx_kws)
+                ]
+                # Fall back to unfiltered if context is too narrow
+                if filtered:
+                    combined = filtered
 
         if combined:
             logger.info(

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { fetchEvidence, type RawEvidenceResponse } from "@/lib/api";
+import { fetchEvidenceItems, type RawEvidenceResponse } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -136,7 +136,7 @@ export function EvidenceExplorerPanel({ runId }: Props) {
     setLoading(true);
     setError("");
     try {
-      const data = await fetchEvidence({
+      const data = await fetchEvidenceItems({
         runId: runId ?? undefined,
         limit: 200,
       });

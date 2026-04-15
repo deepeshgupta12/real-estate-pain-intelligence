@@ -32,6 +32,10 @@ data/raw/*
 data/processed/*
 data/exports/*
 
+# Generated export files from pipeline runs — never commit these
+generated_exports/
+apps/api/generated_exports/
+
 # Keep directories
 !data/raw/.gitkeep
 !data/processed/.gitkeep
