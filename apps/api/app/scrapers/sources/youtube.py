@@ -69,17 +69,29 @@ class YouTubeScraper(BaseSourceScraper):
     # Query helpers
     # ------------------------------------------------------------------
 
-    def _build_query(self, target_brand: str) -> str:
-        return f'"{target_brand}" real estate review'
+    def _build_query(self, target_brand: str, context: str | None = None) -> str:
+        base = f'"{target_brand}" real estate review'
+        if context:
+            from app.scrapers.context_utils import extract_context_keywords as _ekw
+            kws = _ekw(context)[:3]
+            if kws:
+                base = f'{base} {" ".join(kws)}'
+        return base
 
-    def _build_search_query(self, target_brand: str) -> str:
-        return f"{target_brand} real estate app review India"
+    def _build_search_query(self, target_brand: str, context: str | None = None) -> str:
+        base = f"{target_brand} real estate app review India"
+        if context:
+            from app.scrapers.context_utils import extract_context_keywords as _ekw
+            kws = _ekw(context)[:2]
+            if kws:
+                base = f"{base} {' '.join(kws)}"
+        return base
 
     # ------------------------------------------------------------------
     # Tier 1: YouTube Data API v3 (official — no blocking)
     # ------------------------------------------------------------------
 
-    def _scrape_via_data_api(self, target_brand: str) -> list[ScrapedItem]:
+    def _scrape_via_data_api(self, target_brand: str, context: str | None = None) -> list[ScrapedItem]:
         """
         Uses the official YouTube Data API v3 search endpoint.
         Free quota: 10,000 units/day (~100 search calls).
@@ -92,8 +104,8 @@ class YouTubeScraper(BaseSourceScraper):
             return []
 
         fetched_at = datetime.now(timezone.utc)
-        source_query = self._build_query(target_brand)
-        search_q = self._build_search_query(target_brand)
+        source_query = self._build_query(target_brand, context)
+        search_q = self._build_search_query(target_brand, context)
 
         try:
             payload = RetryingHttpClient.get_json(
@@ -197,15 +209,15 @@ class YouTubeScraper(BaseSourceScraper):
     # Tier 2: yt-dlp search (no API key, may be blocked by YouTube)
     # ------------------------------------------------------------------
 
-    def _scrape_via_ytdlp(self, target_brand: str) -> list[ScrapedItem]:
+    def _scrape_via_ytdlp(self, target_brand: str, context: str | None = None) -> list[ScrapedItem]:
         """
         yt-dlp search as fallback when no API key is available.
         YouTube may reset connections in some environments — this is expected.
         """
         settings = get_settings()
         fetched_at = datetime.now(timezone.utc)
-        source_query = self._build_query(target_brand)
-        search_query = self._build_search_query(target_brand)
+        source_query = self._build_query(target_brand, context)
+        search_query = self._build_search_query(target_brand, context)
         n = settings.scraper_max_items_per_source
 
         try:
@@ -382,7 +394,7 @@ class YouTubeScraper(BaseSourceScraper):
     # Main scrape() method
     # ------------------------------------------------------------------
 
-    def scrape(self, target_brand: str) -> list[ScrapedItem]:
+    def scrape(self, target_brand: str, context: str | None = None) -> list[ScrapedItem]:
         settings = get_settings()
 
         if not settings.scraper_enable_live_fetch:
@@ -390,7 +402,7 @@ class YouTubeScraper(BaseSourceScraper):
             return self._build_stub_items(target_brand, "Live fetch disabled")
 
         # Tier 1: YouTube Data API v3 (official, always works when key is set)
-        items = self._scrape_via_data_api(target_brand)
+        items = self._scrape_via_data_api(target_brand, context)
         if items:
             return items
 
@@ -399,7 +411,7 @@ class YouTubeScraper(BaseSourceScraper):
             "YouTube: Data API returned 0 or no key set for '%s' — trying yt-dlp",
             target_brand,
         )
-        items = self._scrape_via_ytdlp(target_brand)
+        items = self._scrape_via_ytdlp(target_brand, context)
         if items:
             return items
 

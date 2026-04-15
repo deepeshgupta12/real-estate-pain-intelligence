@@ -39,8 +39,14 @@ class XPostsScraper(BaseSourceScraper):
     source_name = "x"
     parser_version = "x-alt-v2-live-1"
 
-    def _build_query(self, target_brand: str) -> str:
-        return f'"{target_brand}" real estate complaint'
+    def _build_query(self, target_brand: str, context: str | None = None) -> str:
+        base = f'"{target_brand}" real estate complaint'
+        if context:
+            from app.scrapers.context_utils import extract_context_keywords as _ekw
+            kws = _ekw(context)[:3]
+            if kws:
+                base = f'{base} {" ".join(kws)}'
+        return base
 
     def _build_headers(self) -> dict[str, str]:
         settings = get_settings()
@@ -49,21 +55,21 @@ class XPostsScraper(BaseSourceScraper):
             "Accept": "application/json",
         }
 
-    def _fetch_live_payload(self, target_brand: str) -> dict:
+    def _fetch_live_payload(self, target_brand: str, context: str | None = None) -> dict:
         settings = get_settings()
         return RetryingHttpClient.get_json(
             settings.scraper_public_social_search_base_url,
             params={
-                "query": self._build_query(target_brand),
+                "query": self._build_query(target_brand, context),
                 "tags": "story",
                 "hitsPerPage": settings.scraper_max_items_per_source,
             },
             headers=self._build_headers(),
         )
 
-    def _parse_live_items(self, payload: dict, target_brand: str) -> list[ScrapedItem]:
+    def _parse_live_items(self, payload: dict, target_brand: str, context: str | None = None) -> list[ScrapedItem]:
         fetched_at = datetime.now(timezone.utc)
-        source_query = self._build_query(target_brand)
+        source_query = self._build_query(target_brand, context)
         hits = payload.get("hits") or []
 
         parsed_items: list[ScrapedItem] = []
@@ -187,7 +193,7 @@ class XPostsScraper(BaseSourceScraper):
             ))
         return items
 
-    def scrape(self, target_brand: str) -> list[ScrapedItem]:
+    def scrape(self, target_brand: str, context: str | None = None) -> list[ScrapedItem]:
         settings = get_settings()
 
         if not settings.scraper_enable_live_fetch:
@@ -197,8 +203,8 @@ class XPostsScraper(BaseSourceScraper):
             )
 
         try:
-            payload = self._fetch_live_payload(target_brand)
-            items = self._parse_live_items(payload, target_brand)
+            payload = self._fetch_live_payload(target_brand, context)
+            items = self._parse_live_items(payload, target_brand, context)
             if items:
                 return items
 

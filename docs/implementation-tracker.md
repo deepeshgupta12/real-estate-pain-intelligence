@@ -1315,6 +1315,44 @@ Branch: `feat/step-35-enhancements`
 - Widens `source_name` from `String(100)` to `Text` to safely store comma-separated multi-source values.
 - File: `apps/api/alembic/versions/0020_session_notes_multi_source.py`
 
+---
+
+### Step 36 — Context-aware scraping + migration idempotency fix: ✅ Delivered
+
+**Context-aware scraping:**
+- Users can now attach a research context to any session via the Run Setup panel.
+- **Prebuilt context chips** (single or multi-select): Website & Mobile App, Listings, Projects & Builders, Sales Process & Agents, Post-Sales Process, Complaints & Escalations.
+- **Custom text field**: free-form notes appended after the chip tags.
+- **Storage format**: `session_notes = "[CONTEXT: chip1, chip2] custom text"` — dedicated column, never overwritten by pipeline.
+- **Backend parsing**: `apps/api/app/scrapers/context_utils.py` — `CONTEXT_KEYWORD_MAP` maps chip labels → search keywords; `extract_context_keywords()` parses the format and returns a flat deduplicated keyword list.
+- **Keyword injection**: `ScrapeExecutionService.execute_run()` calls `extract_context_keywords(run.session_notes)` and passes the result as `context_str` to every `scraper.scrape(brand, context=context_str)` call.
+- **All scrapers updated** to accept `context: str | None = None`:
+  - `reddit.py` — `_build_query()`, all tiers + `scrape()`
+  - `youtube.py` — `_build_query()`, `_build_search_query()`, `_scrape_via_data_api()`, `_scrape_via_ytdlp()`, `scrape()`
+  - `x_posts.py` — `_build_query()`, `_fetch_live_payload()`, `_parse_live_items()`, `scrape()`
+  - `app_reviews.py` — `_build_query()`, `_scrape_google_play()`, `_scrape_ios_store()`, `scrape()`
+  - `review_sites.py` — `_build_query()`, `_scrape_google_play()`, `_scrape_apple_store()`, `scrape()`
+- **Base class updated**: `BaseSourceScraper.scrape()` signature extended to `scrape(target_brand, context=None)`.
+- **No context → broad scraping**: when `session_notes` is empty/None, `context_str` is `None` and all scrapers run their default queries unchanged.
+- **Frontend UI**: violet chip toggles + custom textarea in Run Setup; session cards show `🎯 chip labels` or `💬 free text`.
+
+**Migration 0017 idempotency — PostgreSQL version fix:**
+- Previous fix used `CREATE TYPE IF NOT EXISTS` which requires PostgreSQL 12+.
+- Final fix: replaced with `DO $$ BEGIN ... EXCEPTION WHEN duplicate_object THEN NULL; END $$` block which works on all PostgreSQL versions (9.x through 16+).
+- Combined with `create_type=False` on `sa.Enum` (suppresses SQLAlchemy `before_create` hook) and `inspect(bind).has_table("users")` guard.
+- File: `apps/api/alembic/versions/0017_users_table.py`
+
+**Files changed:**
+- `apps/api/app/scrapers/context_utils.py` — NEW: `CONTEXT_KEYWORD_MAP` + `extract_context_keywords()`
+- `apps/api/app/scrapers/base.py` — updated `scrape()` signature
+- `apps/api/app/scrapers/sources/reddit.py` — context threading
+- `apps/api/app/scrapers/sources/youtube.py` — context threading
+- `apps/api/app/scrapers/sources/x_posts.py` — context threading
+- `apps/api/app/scrapers/sources/app_reviews.py` — context threading
+- `apps/api/app/scrapers/sources/review_sites.py` — context threading
+- `apps/api/app/services/scrape_executor.py` — extracts context, passes to scrapers
+- `apps/web/src/components/console/run-setup-panel.tsx` — prebuilt chips + custom text UI
+
 ### Remaining gaps (lower priority):
 The product is now **production-ready** for single-tenant deployment with full live scraping. The following items represent further quality and scale improvements:
 

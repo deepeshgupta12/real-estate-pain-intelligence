@@ -15,6 +15,8 @@ import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
+from app.scrapers.context_utils import extract_context_keywords as _extract_context_keywords
+
 # Negative signal keywords — posts are kept only if they contain at least one
 NEGATIVE_SIGNAL_KEYWORDS = [
     "worst", "terrible", "horrible", "awful", "very bad", "not good",
@@ -74,14 +76,20 @@ class RedditScraper(BaseSourceScraper):
     source_name = "reddit"
     parser_version = "reddit-praw-v1"
 
-    def _build_query(self, target_brand: str) -> str:
-        return f'"{target_brand}" real estate'
+    def _build_query(self, target_brand: str, context: str | None = None) -> str:
+        base = f'"{target_brand}" real estate'
+        if context:
+            # Append up to the first 3 context keywords to focus the search
+            keywords = _extract_context_keywords(context)
+            if keywords:
+                base += " " + " ".join(keywords[:3])
+        return base
 
     # ------------------------------------------------------------------
     # Tier 1: PRAW — Official Reddit API
     # ------------------------------------------------------------------
 
-    def _scrape_via_praw(self, target_brand: str) -> list[ScrapedItem]:
+    def _scrape_via_praw(self, target_brand: str, context: str | None = None) -> list[ScrapedItem]:
         """Use the official Reddit API via PRAW. Returns [] if PRAW unavailable."""
         settings = get_settings()
 
@@ -106,7 +114,7 @@ class RedditScraper(BaseSourceScraper):
                 read_only=not (settings.reddit_username and settings.reddit_password),
             )
 
-            query = self._build_query(target_brand)
+            query = self._build_query(target_brand, context)
             fetched_at = datetime.now(timezone.utc)
             items: list[ScrapedItem] = []
             limit = settings.scraper_max_items_per_source
@@ -263,14 +271,14 @@ class RedditScraper(BaseSourceScraper):
     # Tier 2: PullPush.io — Pushshift-compatible Reddit archive (no auth)
     # ------------------------------------------------------------------
 
-    def _scrape_via_pullpush(self, target_brand: str) -> list[ScrapedItem]:
+    def _scrape_via_pullpush(self, target_brand: str, context: str | None = None) -> list[ScrapedItem]:
         """
         PullPush.io (https://pullpush.io) is a community-run Reddit data service
         that indexes public posts. No authentication required.
         """
         settings = get_settings()
         fetched_at = datetime.now(timezone.utc)
-        source_query = self._build_query(target_brand)
+        source_query = self._build_query(target_brand, context)
 
         try:
             payload = RetryingHttpClient.get_json(
@@ -367,7 +375,7 @@ class RedditScraper(BaseSourceScraper):
         settings = get_settings()
         return f"{settings.scraper_reddit_base_url.rstrip('/')}/search.rss"
 
-    def _fetch_rss_payload(self, target_brand: str) -> str:
+    def _fetch_rss_payload(self, target_brand: str, context: str | None = None) -> str:
         settings = get_settings()
         headers = {
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
@@ -375,14 +383,14 @@ class RedditScraper(BaseSourceScraper):
         }
         return RetryingHttpClient.get_text(
             self._build_rss_url(),
-            params={"q": self._build_query(target_brand), "sort": "new",
+            params={"q": self._build_query(target_brand, context), "sort": "new",
                     "limit": settings.scraper_max_items_per_source},
             headers=headers,
         )
 
-    def _parse_rss_feed(self, xml_text: str, target_brand: str) -> list[ScrapedItem]:
+    def _parse_rss_feed(self, xml_text: str, target_brand: str, context: str | None = None) -> list[ScrapedItem]:
         fetched_at = datetime.now(timezone.utc)
-        source_query = self._build_query(target_brand)
+        source_query = self._build_query(target_brand, context)
         try:
             root = ET.fromstring(xml_text)
         except ET.ParseError:
@@ -465,9 +473,9 @@ class RedditScraper(BaseSourceScraper):
     # Tier 3: Stub data
     # ------------------------------------------------------------------
 
-    def _build_stub_items(self, target_brand: str, fallback_reason: str | None = None) -> list[ScrapedItem]:
+    def _build_stub_items(self, target_brand: str, fallback_reason: str | None = None, context: str | None = None) -> list[ScrapedItem]:
         fetched_at = datetime.now(timezone.utc)
-        source_query = self._build_query(target_brand)
+        source_query = self._build_query(target_brand, context)
 
         stubs = [
             (f"reddit-stub-001", "post", "reddit_user_1",
@@ -525,30 +533,33 @@ class RedditScraper(BaseSourceScraper):
     # Main entry point
     # ------------------------------------------------------------------
 
-    def scrape(self, target_brand: str) -> list[ScrapedItem]:
+    def scrape(self, target_brand: str, context: str | None = None) -> list[ScrapedItem]:
         settings = get_settings()
+
+        if context:
+            logger.info("Reddit: context-aware scraping for '%s' with context='%s'", target_brand, context[:80])
 
         if not settings.scraper_enable_live_fetch:
             logger.info("Reddit: live fetch disabled, using stub data")
-            return self._build_stub_items(target_brand, "Live fetch disabled in settings")
+            return self._build_stub_items(target_brand, "Live fetch disabled in settings", context)
 
         # Tier 1: PRAW (official API) — only if credentials configured
         if settings.reddit_api_enabled:
-            items = self._scrape_via_praw(target_brand)
+            items = self._scrape_via_praw(target_brand, context)
             if items:
                 return items
             logger.warning("Reddit PRAW returned 0 items, trying PullPush fallback")
 
         # Tier 2: PullPush.io (Pushshift-compatible, no auth required)
-        items = self._scrape_via_pullpush(target_brand)
+        items = self._scrape_via_pullpush(target_brand, context)
         if items:
             return items
         logger.warning("Reddit PullPush returned 0 items, trying RSS fallback")
 
         # Tier 3: Reddit RSS feed
         try:
-            xml_text = self._fetch_rss_payload(target_brand)
-            items = self._parse_rss_feed(xml_text, target_brand)
+            xml_text = self._fetch_rss_payload(target_brand, context)
+            items = self._parse_rss_feed(xml_text, target_brand, context)
             if items:
                 logger.info("Reddit RSS: fetched %d items for '%s'", len(items), target_brand)
                 return items
@@ -559,7 +570,7 @@ class RedditScraper(BaseSourceScraper):
         # Tier 4: Stub (only when explicitly enabled)
         if settings.scraper_fail_open_to_stub:
             logger.info("Reddit: falling back to stub data")
-            return self._build_stub_items(target_brand, "All live tiers failed")
+            return self._build_stub_items(target_brand, "All live tiers failed", context)
 
         logger.warning("Reddit: all live tiers failed for '%s', no stub fallback enabled", target_brand)
         return []
