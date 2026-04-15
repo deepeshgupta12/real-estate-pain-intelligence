@@ -259,7 +259,7 @@ class HumanReviewService:
         priority_label: str | None = None,
         analysis_mode: str | None = None,
         include_details: bool = False,
-        limit: int = 50,
+        limit: int = 1000,
         offset: int = 0,
     ) -> list[HumanReviewItemResponse]:
         stmt = select(HumanReviewItem).order_by(HumanReviewItem.id.asc())

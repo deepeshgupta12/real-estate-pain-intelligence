@@ -7,6 +7,41 @@ from app.scrapers.http_client import RetryingHttpClient
 from app.scrapers.types import ScrapedItem
 from app.scrapers.utils import build_dedupe_key, build_payload_snapshot, normalize_whitespace
 
+# Real estate / India proptech relevance filter — at least one keyword must appear
+# in the post text for it to be considered on-topic.  This blocks irrelevant HN
+# posts (e.g. AI system prompts, generic tech discussions) that happen to match
+# the brand name query but have nothing to do with real estate.
+REAL_ESTATE_INDIA_KEYWORDS = [
+    # English property terms
+    "property", "properties", "flat", "apartment", "villa", "plot", "house",
+    "homes", "housing", "real estate", "realty", "residential", "commercial",
+    "builder", "developer", "construction", "project", "listing",
+    "buy home", "rent", "rental", "tenant", "landlord", "pg",
+    # Transaction / finance terms
+    "emi", "loan", "home loan", "mortgage", "token", "booking amount",
+    "registry", "stamp duty", "rera", "carpet area", "super built",
+    # India-specific cities and markets
+    "mumbai", "delhi", "bangalore", "bengaluru", "hyderabad", "pune",
+    "chennai", "kolkata", "noida", "gurgaon", "gurugram", "ahmedabad",
+    "navi mumbai", "thane", "lucknow", "jaipur", "chandigarh",
+    # Agent / brokerage terms
+    "agent", "broker", "site visit", "possession", "society", "township",
+    "sqft", "sq ft", "bhk", "1bhk", "2bhk", "3bhk",
+    # Hindi/Hinglish property words (transliterated)
+    "makaan", "ghar", "zameen", "bhumi", "makan", "kirayedar",
+    "kiraya", "brokerage", "registry", "plot", "zameen",
+    # Brand-specific signals
+    "squareyards", "square yards", "99acres", "magicbricks", "housing.com",
+    "proptech", "prop tech",
+]
+
+
+def _is_real_estate_relevant(text: str) -> bool:
+    """Return True if the text contains at least one real-estate-related keyword."""
+    text_lower = text.lower()
+    return any(kw in text_lower for kw in REAL_ESTATE_INDIA_KEYWORDS)
+
+
 NEGATIVE_SIGNAL_KEYWORDS = [
     "worst", "terrible", "horrible", "awful", "very bad", "not good",
     "slow", "crash", "bug", "glitch", "fraud", "scam", "cheat", "fake",
@@ -88,6 +123,7 @@ class XPostsScraper(BaseSourceScraper):
         parsed_items: list[ScrapedItem] = []
         skipped_empty = 0
         skipped_positive = 0
+        skipped_irrelevant = 0
 
         for hit in hits:
             external_id = hit.get("objectID")
@@ -96,6 +132,14 @@ class XPostsScraper(BaseSourceScraper):
             raw_text = normalize_whitespace(" ".join(part for part in [title, story_text] if part))
             if not raw_text:
                 skipped_empty += 1
+                continue
+
+            # Real-estate relevance filter — skip posts with no property-related content.
+            # This blocks ChatGPT system prompts, generic tech posts, and other off-topic
+            # HN discussions that happen to match the brand name query.
+            if not _is_real_estate_relevant(raw_text):
+                skipped_irrelevant += 1
+                logger.debug("HN: skipping off-topic post (id=%s, title=%r)", external_id, title[:60])
                 continue
 
             # Sentiment filter — skip purely positive posts
@@ -155,8 +199,8 @@ class XPostsScraper(BaseSourceScraper):
             )
 
         logger.info(
-            "HN Algolia: %d kept / %d raw (skipped_positive=%d, skipped_empty=%d) for '%s'",
-            len(parsed_items), len(hits), skipped_positive, skipped_empty, target_brand,
+            "HN Algolia: %d kept / %d raw (skipped_irrelevant=%d, skipped_positive=%d, skipped_empty=%d) for '%s'",
+            len(parsed_items), len(hits), skipped_irrelevant, skipped_positive, skipped_empty, target_brand,
         )
         return parsed_items
 

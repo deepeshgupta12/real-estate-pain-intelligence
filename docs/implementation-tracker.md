@@ -1601,3 +1601,189 @@ Both scrapers were returning 0 items despite being live. Two locale filters were
 - `multilingual.py` — added logging: items total, per-item errors, completion summary.
 
 Result: `logs/run_{id}.log` now captures the entire pipeline lifecycle — scrape → normalize → multilingual → intelligence → review queue — in one file.
+
+---
+
+### Step 38 — Scraper Accuracy Fixes + Docker Hardening + YouTube Sentiment Fix
+Status: Completed
+Branch: `feat/step-38-scraper-docker-fixes`
+
+#### Context
+Three classes of issues discovered after live pipeline runs: (1) wrong app store IDs for Square Yards causing zero iOS/Android reviews, (2) YouTube sentiment filter was over-aggressive — 9/10 legitimate complaint videos were being filtered as positive due to insufficient negative signal keywords, (3) Docker `docker compose build web` was failing with `/app/.next/standalone: not found` because Next.js standalone output was never configured.
+
+#### Delivered
+
+**Square Yards app store ID corrections:**
+- `BRAND_PLAY_APP_IDS["square yards"]` corrected from wrong/missing ID → `"com.sq.yrd.squareyards"` (verified Play Store package name)
+- `BRAND_ITUNES_IDS["square yards"]` corrected to `"1093755061"` (verified Apple App Store numeric ID)
+- `BRAND_APPSTORE_SLUGS` dict added: `"square yards": "square-yards-buy-rent-invest"` for use with app-store-scraper library slug
+- `_get_appstore_slug()` helper method added to both `app_reviews.py` and `review_sites.py`
+- Same corrections applied identically to both scrapers for consistency
+- Files: `apps/api/app/scrapers/sources/app_reviews.py`, `apps/api/app/scrapers/sources/review_sites.py`
+
+**iOS App Store scraper upgrade — Tier A: app-store-scraper library:**
+- Both `app_reviews.py` and `review_sites.py` `_scrape_ios_store()` / `_scrape_apple_store()` methods replaced with two-tier architecture:
+  - **Tier A (primary)**: `app-store-scraper==0.3.5` Python library — `AppStore(country="in", app_name=slug, app_id=str(id))` → `store.review(how_many=100)` → `store.reviews` list. Fields: `title`, `review`, `rating`, `date`, `userName`. Per-item and per-page logging.
+  - **Tier B (fallback)**: iTunes RSS XML feed (existing implementation kept) — activates automatically when `app-store-scraper` import fails or returns 0 results.
+- `app-store-scraper==0.3.5` intentionally NOT added to `pyproject.toml` due to `requests==2.23.0` pin conflicting with `sentry-sdk>=1.40.0` (`urllib3<1.26` vs `urllib3>=1.26.11`).
+- Installed separately in `Dockerfile` with `pip install --no-deps app-store-scraper==0.3.5` to bypass the transitive dependency conflict.
+- Full per-review logging added to both tiers: raw count fetched, kept/skipped_positive/skipped_empty breakdown after sentiment filter.
+- Files: `apps/api/app/scrapers/sources/app_reviews.py`, `apps/api/app/scrapers/sources/review_sites.py`
+
+**YouTube sentiment filter fix — over-aggressive filtering:**
+- Root cause: `NEGATIVE_SIGNAL_KEYWORDS` contained only strong complaint words; experience/comparison/rating videos (which contain valuable complaints) were being classified as positive and skipped.
+- `NEGATIVE_SIGNAL_KEYWORDS` expanded with ~20 new terms: `"experience"`, `"worth it"`, `"comparison"`, `"rating"`, `"my experience"`, `"should you"`, `"honest review"`, plus Hindi transliterations `"dhoka"` (fraud), `"bekaar"` (useless), `"bakwas"` (rubbish), `"ghatiya"` (low quality), `"bekar"`, `"bura"` (bad), `"nuksaan"` (loss/damage).
+- `_build_search_query()` changed from `"{target_brand}" real estate app review India` (exact-match quoted brand) → `{target_brand} review complaint experience India` (unquoted, broader, complaint-focused).
+- File: `apps/api/app/scrapers/sources/youtube.py`
+
+**review_sites.py — detailed per-step logging:**
+- Added comprehensive logging to `_scrape_google_play()`: logs raw review count from SDK, and after sentiment filter logs kept/skipped_positive/skipped_empty breakdown per batch.
+- Apple store logging added in both Tier A and Tier B paths.
+- Enables instant diagnosis from `logs/run_{id}.log` whether 0 items is due to wrong app ID, locale filter, sentiment over-filtering, or SDK import failure.
+- File: `apps/api/app/scrapers/sources/review_sites.py`
+
+**Docker build — Next.js standalone output:**
+- Root cause: `apps/web/Dockerfile` stage `runner` does `COPY --from=builder /app/.next/standalone ./` which requires Next.js `output: "standalone"` mode. Without it, `.next/standalone/` is never created during `npm run build` and the Docker build fails with `failed to compute cache key: "/app/.next/standalone": not found`.
+- Fix: added `output: "standalone"` to `apps/web/next.config.ts`.
+- File: `apps/web/next.config.ts`
+
+**Dockerfile — multi-stage build hardening (api):**
+- Stage 1 (builder): switched from `python:3.11-slim` to full `python:3.11` image — eliminates all `apt-get` calls (which were failing due to `deb.debian.org` unreachable from Docker network on user's machine). Full image already ships with `gcc`, `build-essential`, `libpq-dev`.
+- Stage 2 (runtime): `python:3.11-slim` with `psycopg[binary]` bundling its own `libpq` — no system `libpq5` install needed.
+- `COPY app/ ./app/` added to builder stage before `pip install` — required by setuptools to build the wheel (declared `packages = ["app"]` in `pyproject.toml`).
+- `app-store-scraper==0.3.5` installed with `pip install --prefix=/install --no-deps` in a separate `RUN` layer to avoid urllib3 conflict.
+- `curl`-based `HEALTHCHECK` replaced with `python -c "import urllib.request, sys; urllib.request.urlopen('http://localhost:8000/health'); sys.exit(0)"` — eliminates `curl` system dependency.
+- File: `apps/api/Dockerfile`
+
+#### Files modified
+- `apps/api/app/scrapers/sources/app_reviews.py`
+- `apps/api/app/scrapers/sources/review_sites.py`
+- `apps/api/app/scrapers/sources/youtube.py`
+- `apps/api/Dockerfile`
+- `apps/web/next.config.ts`
+
+#### Test notes
+- `docker compose build api worker` — builds successfully (~69s, FINISHED)
+- `docker compose build web` — now succeeds with `output: "standalone"` in `next.config.ts`
+- Square Yards iOS reviews now routed through `app-store-scraper` Tier A (100 reviews) with iTunes RSS Tier B fallback
+- YouTube sentiment filter now retains experience/comparison/rating videos in addition to explicit complaint keywords
+- Run log files show detailed per-step kept/skipped breakdown for all app store scrapers
+
+#### Scope coverage update
+- P1 (Real semantic embeddings): Still open — sentence-transformers graceful degradation in place
+- P8 (Hinglish NLP): Still open
+- P11 (React Context / Zustand): Still open
+- All other items from V1–V3 scope: ✅ Delivered
+
+
+---
+
+### Step 39 — Scraper Quality + UX Fixes + Semantic Embeddings + Hinglish NLP + Zustand State
+Status: Completed
+Branch: `feat/step-39-quality-ux-state-fixes`
+
+#### Context
+Six bugs and three pending enhancements identified from live run logs (`run_3.log`) and UI screenshots. Issues ranged from the Pain Points panel never refreshing after analysis, to junk AI content showing up in the X/social source, to review_sites.py duplicating app store scraping instead of scraping web review platforms.
+
+#### Delivered
+
+**Bug Fix 1 — Pain Points panel never refreshing after Step 4 (Analyze)**
+- Root cause: `PainPointsPanel` `useEffect` had `[runId]` as dependency array. After Analyze step, `runId` is unchanged — panel never re-fetched even though insights existed in DB.
+- Fix: Added `insightRefreshKey?: number` prop to `PainPointsPanel`. Updated `useEffect` to `[runId, insightRefreshKey]`.
+- Added `insightRefreshKey` state to `workspace-shell.tsx` alongside existing `exportRefreshKey`. Incremented in `generate_insights` action handler immediately after `processRunIntelligence()` resolves.
+- Passed `insightRefreshKey={insightRefreshKey}` to `<PainPointsPanel>` render.
+- Files: `apps/web/src/components/console/pain-points-panel.tsx`, `apps/web/src/components/console/workspace-shell.tsx`
+
+**Bug Fix 2 — Review queue hard-capped at 50 items**
+- Root cause: `HumanReviewService.list_review_queue()` default `limit` parameter was `50`. Frontend passes `limit: 500` explicitly but backend default was the bottleneck when called without explicit limit.
+- Fix: Changed default `limit` from `50` → `1000` in `apps/api/app/services/human_review.py`.
+- Files: `apps/api/app/services/human_review.py`
+
+**Bug Fix 3 — YouTube scraping only 10 results (all brands)**
+- Root cause: `.env.example` had `SCRAPER_MAX_ITEMS_PER_SOURCE=10`, producing `min(10, 50) = 10` videos. With the sentiment filter (7 out of 10 filtered as positive), only 3 kept.
+- Fix A: Updated `.env.example` default `SCRAPER_MAX_ITEMS_PER_SOURCE` from `10` → `50`.
+- Fix B: Added `_build_search_queries()` returning 5 diverse query variations: review/complaint/experience, problem/issue/feedback, scam/fraud/beware, app not working/hidden charges, honest review/property. Each query runs independently with `per_query_limit = max(10, total_budget // num_queries)` requests. Results deduplicated by videoId across all queries.
+- Files: `apps/api/app/scrapers/sources/youtube.py`, `apps/api/.env.example`
+
+**Bug Fix 4 — X/Social source returning ChatGPT system prompt and other junk content**
+- Root cause: HN Algolia query `Square Yards real estate` matched an HN post about AI tools in real estate containing a full ChatGPT system prompt. No content relevance filter existed — any HN hit matching the brand name query passed the sentiment filter if it contained any negative keyword.
+- Fix: Added `REAL_ESTATE_INDIA_KEYWORDS` list (60+ terms: property types, Indian cities, transaction terms, brand names, Hindi property words). New `_is_real_estate_relevant(text)` function: post must contain at least one keyword to be included. Applied before the sentiment filter. Skipped-irrelevant count logged separately.
+- Files: `apps/api/app/scrapers/sources/x_posts.py`
+
+**Bug Fix 5 — review_sites.py duplicating app_reviews.py (both scraped app stores)**
+- Root cause: `review_sites.py` was previously refactored to scrape Google Play + Apple App Store, but `app_reviews.py` already does this. Two scrapers doing identical work inflated item counts and wasted API quota.
+- Fix: Complete rewrite of `review_sites.py` to scrape web review platforms instead:
+  - **Trustpilot** (`_scrape_trustpilot`): Extracts reviews from `__NEXT_DATA__` Next.js JSON embedded in page HTML. Handles multiple known JSON paths (`props.pageProps.reviews`, `businessUnit.reviews`, etc.). Regex fallback for `"text": "..."` patterns when JSON structure changes. Fetches pages 1–3 (~60 reviews).
+  - **MouthShut** (`_scrape_mouthshut`): India-specific consumer review site. HTML scraping for review text blocks using multiple CSS patterns with regex fallback.
+  - Brand domain mappings: Trustpilot (squareyards.com, 99acres.com, magicbricks.com, housing.com, nobroker.in), MouthShut (squareyards, 99acres, magicbricks, housingcom, nobroker).
+  - Updated stub items to use web review platform tone and URLs.
+  - `source_name = "review_sites"` preserved for DB backward compatibility.
+- Files: `apps/api/app/scrapers/sources/review_sites.py`
+
+**Bug Fix 6 — app-store-scraper not installed in local dev**
+- Root cause: Package cannot go in `pyproject.toml` due to `requests==2.23.0` conflict. No local install script existed.
+- Fix: Created `scripts/install-extras.sh` — detects active venv or `.venv/bin/pip`, runs `pip install --no-deps app-store-scraper==0.3.5`. Idempotent, includes verification output. Made executable (`chmod +x`).
+- Files: `scripts/install-extras.sh` (new)
+
+**Enhancement P1 — Real semantic embeddings (sentence-transformers)**
+- `sentence-transformers>=2.7.0` added to `apps/api/pyproject.toml` dependencies.
+- `Dockerfile` updated: added `RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')"` in builder stage to pre-download the model (~117 MB). Added `COPY --from=builder /root/.cache /root/.cache` to runtime stage to avoid re-download on container start.
+- `.env.example` updated: `EMBEDDING_PROVIDER=sentence_transformers`, `EMBEDDING_MODEL_NAME=paraphrase-multilingual-MiniLM-L12-v2`, `EMBEDDING_DIMENSIONS=384`. Note added about DB migration required if switching from hash (64-dim) to sentence-transformers (384-dim).
+- `apps/api/app/services/embeddings.py` was already fully implemented with graceful degradation — no code changes needed there.
+- Files: `apps/api/pyproject.toml`, `apps/api/Dockerfile`, `apps/api/.env.example`
+
+**Enhancement P8 — Hinglish NLP improvements**
+- `HINGLISH_MARKERS` expanded from 24 → 55+ words covering: copulas, particles/postpositions, negation, conjunctions, pronouns, question words, intensifiers/adverbs, and real estate Hinglish terms (ghar, makaan, zameen, kiraya, etc.).
+- Added `HINGLISH_PAIN_TRANSLATIONS` dict: 40+ Hinglish pain expressions mapped to English equivalents (dhoka→fraud/betrayal, bekaar→useless/worthless, paisa barbad→wasted money, jawab nahi→no response, etc.).
+- Added `_enrich_hinglish_bridge(text)` function: injects English equivalents inline (e.g. `"dhoka hua"` → `"dhoka [fraud/betrayal] hua"`) so LLM analysis understands the sentiment without multilingual training.
+- `_is_hinglish()` improved: now detects Hinglish if 2+ marker words OR 1+ pain-translation term present (handles short-form reviews like "app bahut slow hai, fraud hai").
+- `_build_bridge_text()` updated: Hinglish (hi-Latn) → enriched text with `[Hinglish review — mixed Hindi/English]` prefix; Hindi (hi) → `[Hindi review]` prefix; Urdu → `[Urdu review]` prefix.
+- `multilingual_notes` field now stores `script=X, lang=Y, family=Z` for diagnostics instead of generic completion string.
+- Files: `apps/api/app/services/multilingual.py`
+
+**Enhancement P11 — Zustand global state management**
+- `zustand>=4.5.2` added to `apps/web/package.json` dependencies.
+- Created `apps/web/src/lib/store.ts`: Zustand store with typed `RunState` and `RunActions` interfaces.
+  - State: `currentRunId`, `currentRun`, `insightRefreshKey`, `exportRefreshKey`, `isPipelineRunning`, `lastPipelineError`.
+  - Actions: `setCurrentRunId`, `setCurrentRun`, `triggerInsightRefresh`, `triggerExportRefresh`, `setPipelineRunning`, `setLastPipelineError`, `clearPipelineError`, `resetRunState`.
+  - Exported convenience selectors (`useCurrentRunId`, `useCurrentRun`, etc.) to prevent unnecessary re-renders via selector subscriptions.
+  - Designed for gradual adoption — existing `workspace-shell.tsx` prop drilling still works; components can migrate to store selectors incrementally.
+- Files: `apps/web/package.json`, `apps/web/src/lib/store.ts` (new)
+
+#### Files modified
+- `apps/web/src/components/console/pain-points-panel.tsx`
+- `apps/web/src/components/console/workspace-shell.tsx`
+- `apps/api/app/services/human_review.py`
+- `apps/api/app/scrapers/sources/youtube.py`
+- `apps/api/app/scrapers/sources/x_posts.py`
+- `apps/api/app/scrapers/sources/review_sites.py`
+- `apps/api/app/services/multilingual.py`
+- `apps/api/app/services/embeddings.py` (no changes — already implemented)
+- `apps/api/pyproject.toml`
+- `apps/api/Dockerfile`
+- `apps/api/.env.example`
+- `apps/web/package.json`
+- `apps/web/next.config.ts` (from Step 38)
+
+#### Files created
+- `scripts/install-extras.sh`
+- `apps/web/src/lib/store.ts`
+
+#### Test notes
+- Pain Points panel: After running Step 4 (Analyze), panel now automatically re-fetches insights. Previously showed "No pain points yet" indefinitely.
+- Review queue: All 180 insights now visible (was capped at 50).
+- YouTube: 5 query variations produce more diverse results; 50 max results per brand instead of 10.
+- X/Social: ChatGPT system prompts and other off-topic HN posts filtered out at `skipped_irrelevant` stage before sentiment filter.
+- review_sites: Now scrapes Trustpilot + MouthShut web pages instead of duplicating app store scraping.
+- sentence-transformers: Install `pip install sentence-transformers` and the service auto-upgrades from hash to 384-dim semantic embeddings. No code changes needed.
+- Hinglish: `"dhoka hua, paisa barbad"` → `"dhoka [fraud/betrayal] hua, paisa barbad [wasted money]"` bridge text for LLM.
+
+#### Pending scope items (P-series)
+- P2: Competitor mention clustering
+- P3: Trending topics over time
+- P4: Topic modeling (LDA/BERTopic)
+- P5: Multi-tenant isolation
+- P6: Advanced search filters
+- P7: Real-time pipeline notifications
+- P9: Automated report generation
+- P10: A/B testing framework for scraper queries
