@@ -139,9 +139,11 @@ class AppReviewsScraper(BaseSourceScraper):
 
         try:
             from google_play_scraper import reviews as gps_reviews, Sort  # type: ignore
+            # NOTE: Do NOT set lang="en" — Indian users review in Hindi/Hinglish.
+            # Filtering to English returns 0 results for Indian real-estate apps.
+            # We fetch all languages and let the sentiment filter handle relevance.
             result, _ = gps_reviews(
                 app_id,
-                lang="en",
                 country="in",
                 sort=Sort.NEWEST,
                 count=100,
@@ -224,12 +226,15 @@ class AppReviewsScraper(BaseSourceScraper):
         source_url = f"https://apps.apple.com/in/app/{app_id}"
         items: list[ScrapedItem] = []
 
-        # Fetch pages 1 and 2 to get up to 100 reviews
-        for page in range(1, 3):
+        # Fetch up to 5 pages (50 reviews/page = up to 250 reviews).
+        # NOTE: Do NOT pass l=en or cc=in — these locale params cause Apple's RSS to
+        # return 0 entries for Indian apps where most reviews are in Hindi/Hinglish.
+        # Fetching without locale params returns all recent reviews regardless of language.
+        for page in range(1, 6):
             try:
                 url = f"https://itunes.apple.com/rss/customerreviews/page={page}/id={app_id}/sortby=mostrecent/json"
                 logger.debug("Apple App Store: fetching page %d — %s", page, url)
-                payload = RetryingHttpClient.get_json(url, params={"l": "en", "cc": "in"})
+                payload = RetryingHttpClient.get_json(url)
                 feed = payload.get("feed") or {}
                 entries = feed.get("entry") or []
                 if isinstance(entries, dict):

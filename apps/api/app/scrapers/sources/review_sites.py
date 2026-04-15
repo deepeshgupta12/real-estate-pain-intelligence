@@ -147,9 +147,10 @@ class ReviewSitesScraper(BaseSourceScraper):
             # Tier A: google-play-scraper SDK (best quality, most reviews)
             try:
                 from google_play_scraper import reviews as gps_reviews, Sort  # type: ignore
+                # NOTE: Do NOT set lang="en" — Indian users review in Hindi/Hinglish.
+                # Filtering to English returns 0 results for Indian real-estate apps.
                 result, _ = gps_reviews(
                     app_id,
-                    lang="en",
                     country="in",
                     sort=Sort.NEWEST,
                     count=500,  # fetch as many as SDK allows; no artificial cap
@@ -296,10 +297,12 @@ class ReviewSitesScraper(BaseSourceScraper):
         source_url = f"https://apps.apple.com/in/app/{app_id}"
         items: list[ScrapedItem] = []
 
+        # NOTE: Do NOT pass l=en or cc=in — these locale params cause Apple's RSS to
+        # return 0 entries for Indian apps where most reviews are in Hindi/Hinglish.
         for page in range(1, 6):  # pages 1–5; empty page signals end of results
             try:
                 url = f"https://itunes.apple.com/rss/customerreviews/page={page}/id={app_id}/sortby=mostrecent/json"
-                payload = RetryingHttpClient.get_json(url, params={"l": "en", "cc": "in"})
+                payload = RetryingHttpClient.get_json(url)
                 feed = payload.get("feed") or {}
                 entries = feed.get("entry") or []
                 if isinstance(entries, dict):
