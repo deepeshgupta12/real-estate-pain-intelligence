@@ -1,14 +1,17 @@
 """Add pain_point_fingerprints table for cross-run trending
 
 Revision ID: 0018_pain_point_fingerprints
-Revises: 0017_system_state_cascade
+Revises: 0017_users_table
 Create Date: 2026-04-13
+
+Note: originally referenced 0017_system_state_cascade which was never created;
+corrected to reference the actual revision 0017_users_table.
 """
 from alembic import op
 import sqlalchemy as sa
 
 revision = "0018_pain_point_fingerprints"
-down_revision = "0017_system_state_cascade"
+down_revision = "0017_users_table"
 branch_labels = None
 depends_on = None
 
