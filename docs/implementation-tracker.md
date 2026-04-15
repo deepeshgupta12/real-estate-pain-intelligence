@@ -21,7 +21,7 @@ Real Estate Pain Point Intelligence Platform
 - CSV/JSON/PDF exports
 - Highly polished frontend from day one
 - No authentication in V1
-- Live public-source scraper implementation is intentionally deferred to a later phase; current source scrapers remain deterministic stubs until that phase
+- Live public-source scraper implementation
 
 ## Phase Plan
 1. Foundation and skeleton
@@ -1274,11 +1274,52 @@ Branch: `feat/step-35-enhancements`
 - `pain_point_summary` extracted per item
 - Files changed: `apps/api/app/scrapers/sources/x_posts.py`
 
+### Step 35 (continued) — Bug fixes: hydration mismatch, export 404, migration chain
+
+**Hydration mismatch — Activity Log relative timestamps:**
+- Root cause: `formatTime()` called `new Date()` at SSR render time; server and client timestamps differed by ~1 second ("32m ago" vs "31m ago"), triggering React's hydration error.
+- Fix: `now` state initialised as `undefined` during SSR (renders `"…"` placeholder); set to `new Date()` in `useEffect` after mount with a 60-second refresh interval. Server and client HTML now always match.
+- File changed: `apps/web/src/components/console/run-events-panel.tsx`
+
+**Export download 404:**
+- Root cause: `getExportDownloadUrl()` returned a relative path `/api/v1/exports/download/:id` which was routed to Next.js — no such handler exists there (no proxy in `next.config.ts`).
+- Fix: returns absolute URL `${API_BASE_URL}/api/v1/exports/download/:id` pointing directly at FastAPI.
+- File changed: `apps/web/src/lib/api.ts`
+
+**Multi-platform checkbox selection (P3 resolved):**
+- Platform selector replaced with checkboxes — any combination of Reddit, YouTube, App Reviews, Review Sites, X in a single session.
+- `source_name` stored as comma-separated string (e.g. `"reddit,youtube,app_reviews"`); `ScrapeExecutionService` fans out across all selected sources; a single failing source is skipped rather than aborting the run.
+- All downstream steps (normalisation, intelligence, indexing, queue, Notion, exports) query by `run_id` — they pick up the full multi-source corpus with zero changes.
+- Current Run panel and Recent Sessions show all platform icons + human label; multi-source sessions show a "multi" badge.
+- Files changed: `apps/web/src/components/console/run-setup-panel.tsx`, `apps/web/src/components/console/current-run-panel.tsx`, `apps/web/src/lib/api.ts`, `apps/api/app/services/scrape_executor.py`
+
+**Session Notes (was silently broken):**
+- Root cause: notes textarea was wired to `orchestrator_notes`; the moment "Collect Feedback" was triggered, `OrchestratorService.dispatch_run()` overwrote it with "Run dispatched to orchestrator queue" — user notes lost immediately.
+- Fix: new `session_notes` column (migration 0020) stores user-authored context permanently, never touched by the pipeline.
+- Current Run panel shows session notes under "Session Notes" separately from "Pipeline Status" (orchestrator_notes).
+- `session_notes` included in JSON export output and PDF cover page.
+- Files changed: `apps/api/app/models/scrape_run.py`, `apps/api/app/schemas/run.py`, `apps/api/app/api/v1/runs.py`, `apps/api/app/services/export.py`, `apps/web/src/lib/api.ts`, `apps/web/src/components/console/run-setup-panel.tsx`, `apps/web/src/components/console/current-run-panel.tsx`
+
+**Alembic migration chain repair:**
+- Root cause: `0018_pain_point_fingerprints` referenced `down_revision = "0017_system_state_cascade"` — a migration that was never created. Alembic threw `KeyError: '0017_system_state_cascade'` when walking the chain.
+- Fix: corrected `0018` to reference `down_revision = "0017_users_table"` (the actual migration 17).
+- File changed: `apps/api/alembic/versions/0018_pain_point_fingerprints.py`
+
+**Migration 0017 idempotency fix (DuplicateObject: user_role_enum):**
+- Root cause: `0017_users_table` was partially applied before (enum + table created in DB) but never recorded in `alembic_version` due to the broken chain. Once the chain was repaired, Alembic tried to re-run 0017 and hit `DuplicateObject: type "user_role_enum" already exists`. The first fix using only `CREATE TYPE IF NOT EXISTS` was insufficient because `op.create_table` with `sa.Enum(name="user_role_enum")` fires a SQLAlchemy `before_create` event hook that issues a second `CREATE TYPE` without `IF NOT EXISTS`.
+- Fix: three-layer guard — (1) `CREATE TYPE IF NOT EXISTS` via `op.execute`, (2) `create_type=False` on `sa.Enum` to suppress the SQLAlchemy auto-CREATE hook, (3) `inspect(bind).has_table("users")` check to skip `op.create_table` entirely if the table already exists.
+- File changed: `apps/api/alembic/versions/0017_users_table.py`
+
+**Alembic migration 0020 — session_notes + source_name widening:**
+- Adds `session_notes TEXT` column to `scrape_runs`.
+- Widens `source_name` from `String(100)` to `Text` to safely store comma-separated multi-source values.
+- File: `apps/api/alembic/versions/0020_session_notes_multi_source.py`
+
 ### Remaining gaps (lower priority):
 The product is now **production-ready** for single-tenant deployment with full live scraping. The following items represent further quality and scale improvements:
 
 **Scale and UX:**
-- P3: Multi-source / multi-brand runs (fan-out to multiple source×brand combos)
+- ~~P3: Multi-source / multi-brand runs~~ ✅ Delivered in Step 35
 - P8: Real Hinglish NLP processing (IndicNLP or lightweight translation)
 - P9: Server-side pagination and richer review queue filtering
 - P10: Data retention and run archiving
@@ -1286,6 +1327,6 @@ The product is now **production-ready** for single-tenant deployment with full l
 - P12: React error boundaries per major console section
 
 **Top 3 next highest-impact items:**
-1. **Multi-source / multi-brand runs** (P3) — core to competitive intelligence value prop
-2. **Frontend state management** (P11) — needed as the console grows in complexity
-3. **Hinglish NLP** (P8) — critical for Indian market signal quality
+1. **Frontend state management** (P11) — needed as the console grows in complexity
+2. **Hinglish NLP** (P8) — critical for Indian market signal quality
+3. **Data retention and run archiving** (P10) — needed for multi-run history management
