@@ -26,6 +26,7 @@ dependencies = [
   "email-validator>=2.1.0",
   "praw>=7.7.0",
   "google-play-scraper>=1.2.7",
+  "app-store-scraper>=0.3.5",
   "yt-dlp>=2024.1.1"
 ]
 

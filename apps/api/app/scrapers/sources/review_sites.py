@@ -82,7 +82,7 @@ def _matches_context(text: str, context_keywords: list[str]) -> bool:
 
 # Known Google Play app IDs for Indian real estate brands
 BRAND_PLAY_APP_IDS: dict[str, str] = {
-    "square yards":  "com.squareyards.app",
+    "square yards":  "com.sq.yrd.squareyards",   # https://play.google.com/store/apps/details?id=com.sq.yrd.squareyards
     "99acres":       "com.ninetynineacres.app",
     "magicbricks":   "com.magicbricks.app",
     "housing":       "com.housing.app",
@@ -93,12 +93,22 @@ BRAND_PLAY_APP_IDS: dict[str, str] = {
 }
 
 # Known Apple App Store IDs for Indian real estate brands
+# IDs sourced from official App Store URLs (e.g. apps.apple.com/in/app/…/id<ID>)
 BRAND_ITUNES_IDS: dict[str, str] = {
-    "square yards":  "1082944916",
+    "square yards":  "1093755061",   # https://apps.apple.com/in/app/square-yards-buy-rent-invest/id1093755061
     "99acres":       "438985091",
     "magicbricks":   "567898523",
     "housing":       "878516912",
     "nobroker":      "1085715402",
+}
+
+# App Store URL slugs (used by app-store-scraper library)
+BRAND_APPSTORE_SLUGS: dict[str, str] = {
+    "square yards":  "square-yards-buy-rent-invest",
+    "99acres":       "99acres-property-search",
+    "magicbricks":   "magicbricks-property-search",
+    "housing":       "housing-com",
+    "nobroker":      "nobroker-homes-pg-flats",
 }
 
 
@@ -129,6 +139,13 @@ class ReviewSitesScraper(BaseSourceScraper):
                 return app_id
         return None
 
+    def _get_appstore_slug(self, target_brand: str) -> str:
+        brand_lower = target_brand.lower().strip()
+        for key, slug in BRAND_APPSTORE_SLUGS.items():
+            if key in brand_lower or brand_lower in key:
+                return slug
+        return target_brand.lower().replace(" ", "-")
+
     # ------------------------------------------------------------------
     # Google Play Store — all available negative reviews (no artificial cap)
     # ------------------------------------------------------------------
@@ -155,13 +172,22 @@ class ReviewSitesScraper(BaseSourceScraper):
                     sort=Sort.NEWEST,
                     count=500,  # fetch as many as SDK allows; no artificial cap
                 )
+                raw_count = len(result)
+                logger.info(
+                    "Google Play (SDK): %d raw reviews fetched for '%s' app_id=%s",
+                    raw_count, target_brand, app_id,
+                )
                 items: list[ScrapedItem] = []
+                skipped_positive = 0
+                skipped_empty = 0
                 for r in result:
                     text = normalize_whitespace((r.get("content") or "").strip())
                     if not text:
+                        skipped_empty += 1
                         continue
                     rating = r.get("score")
                     if not _has_negative_signal(text, rating):
+                        skipped_positive += 1
                         continue
 
                     review_id = str(r.get("reviewId") or r.get("userName") or f"gplay-{len(items)}")
@@ -202,8 +228,11 @@ class ReviewSitesScraper(BaseSourceScraper):
                             "pain_point_summary": pain_summary,
                         },
                     ))
+                logger.info(
+                    "Google Play (SDK): %d kept / %d raw (skipped_positive=%d, skipped_empty=%d) for '%s'",
+                    len(items), raw_count, skipped_positive, skipped_empty, target_brand,
+                )
                 if items:
-                    logger.info("Google Play (SDK): %d negative reviews for '%s'", len(items), target_brand)
                     return items
             except ImportError:
                 pass
@@ -284,22 +313,126 @@ class ReviewSitesScraper(BaseSourceScraper):
         return items
 
     # ------------------------------------------------------------------
-    # Apple iOS App Store — all available negative reviews (pages 1–5, no cap)
+    # Apple iOS App Store — all available negative reviews (no cap)
+    # Tier A: app-store-scraper library (preferred — richer data)
+    # Tier B: iTunes RSS fallback (pages 1–5)
     # ------------------------------------------------------------------
 
     def _scrape_apple_store(self, target_brand: str, context: str | None = None) -> list[ScrapedItem]:
         app_id = self._get_itunes_app_id(target_brand)
         if not app_id:
+            logger.debug("No App Store app ID for '%s'", target_brand)
             return []
 
         fetched_at = datetime.now(timezone.utc)
         source_query = self._build_query(target_brand, context)
-        source_url = f"https://apps.apple.com/in/app/{app_id}"
+        source_url = f"https://apps.apple.com/in/app/id{app_id}"
         items: list[ScrapedItem] = []
 
+        # ------ Tier A: app-store-scraper library ------
+        try:
+            from app_store_scraper import AppStore  # type: ignore
+            brand_slug = self._get_appstore_slug(target_brand)
+            logger.info(
+                "Apple App Store (app-store-scraper): fetching for '%s' app_id=%s slug=%s",
+                target_brand, app_id, brand_slug,
+            )
+            store = AppStore(country="in", app_name=brand_slug, app_id=app_id)
+            store.review(how_many=500)
+            raw_reviews = store.reviews or []
+            raw_count = len(raw_reviews)
+            logger.info(
+                "Apple App Store (app-store-scraper): %d raw reviews fetched for '%s'",
+                raw_count, target_brand,
+            )
+
+            skipped_positive = 0
+            skipped_empty = 0
+            for r in raw_reviews:
+                title = (r.get("title") or "").strip()
+                review_text = (r.get("review") or "").strip()
+                text = normalize_whitespace(" ".join(p for p in [title, review_text] if p))
+                if not text:
+                    skipped_empty += 1
+                    continue
+
+                rating = r.get("rating")
+                if not _has_negative_signal(text, rating):
+                    skipped_positive += 1
+                    continue
+
+                user_name = r.get("userName") or None
+                review_date = r.get("date")
+                published_at = review_date if isinstance(review_date, datetime) else None
+                review_id = f"apple-{abs(hash(text)) % 10 ** 9}"
+                pain_summary = _make_pain_point_summary(text)
+
+                items.append(ScrapedItem(
+                    source_name=self.source_name,
+                    platform_name=target_brand,
+                    content_type="review",
+                    external_id=review_id,
+                    author_name=user_name,
+                    source_url=source_url,
+                    published_at=published_at,
+                    fetched_at=fetched_at,
+                    source_query=source_query,
+                    parser_version="review-sites-ios-appstore-scraper-v1",
+                    dedupe_key=build_dedupe_key(
+                        source_name=self.source_name,
+                        external_id=review_id,
+                        source_url=source_url,
+                        raw_text=text,
+                    ),
+                    raw_payload_json=build_payload_snapshot({
+                        "rating": rating,
+                        "app_id": app_id,
+                        "title": title,
+                        "review": review_text,
+                        "user": user_name,
+                    }),
+                    raw_text=text,
+                    cleaned_text=text,
+                    language="en",
+                    metadata_json={
+                        "store": "apple_app_store",
+                        "store_platform": "ios_app_store",
+                        "app_id": app_id,
+                        "rating": rating,
+                        "fetch_mode": "app_store_scraper",
+                        "pain_point_summary": pain_summary,
+                    },
+                ))
+
+            logger.info(
+                "Apple App Store (app-store-scraper): %d kept / %d raw "
+                "(skipped_positive=%d, skipped_empty=%d) for '%s'",
+                len(items), raw_count, skipped_positive, skipped_empty, target_brand,
+            )
+            if items:
+                return items
+            if raw_reviews:
+                logger.info(
+                    "Apple App Store: all %d reviews were positive for '%s' — nothing to keep",
+                    raw_count, target_brand,
+                )
+                return []
+        except ImportError:
+            logger.warning(
+                "app-store-scraper not installed — falling back to iTunes RSS for '%s'",
+                target_brand,
+            )
+        except Exception as exc:
+            logger.warning(
+                "app-store-scraper failed for '%s' (app_id=%s): %s — falling back to iTunes RSS",
+                target_brand, app_id, exc,
+            )
+
+        # ------ Tier B: iTunes RSS fallback ------
         # NOTE: Do NOT pass l=en or cc=in — these locale params cause Apple's RSS to
         # return 0 entries for Indian apps where most reviews are in Hindi/Hinglish.
-        for page in range(1, 6):  # pages 1–5; empty page signals end of results
+        logger.info("Apple App Store (iTunes RSS): fetching pages 1–5 for '%s' app_id=%s", target_brand, app_id)
+        for page in range(1, 6):
             try:
                 url = f"https://itunes.apple.com/rss/customerreviews/page={page}/id={app_id}/sortby=mostrecent/json"
                 payload = RetryingHttpClient.get_json(url)
@@ -307,6 +440,17 @@ class ReviewSitesScraper(BaseSourceScraper):
                 entries = feed.get("entry") or []
                 if isinstance(entries, dict):
                     entries = [entries]
+
+                page_raw = len(entries)
+                page_kept = 0
+                logger.info(
+                    "Apple App Store (iTunes RSS): page %d — %d raw entries for '%s' app_id=%s",
+                    page, page_raw, target_brand, app_id,
+                )
+
+                if page_raw == 0:
+                    logger.info("Apple App Store (iTunes RSS): no more entries at page %d — stopping", page)
+                    break
 
                 for entry in entries:
                     content = (entry.get("content") or {}).get("label") or ""
@@ -324,7 +468,8 @@ class ReviewSitesScraper(BaseSourceScraper):
                     if not _has_negative_signal(text, rating):
                         continue
 
-                    review_id = (entry.get("id") or {}).get("label") or f"apple-{len(items)}"
+                    page_kept += 1
+                    review_id = (entry.get("id") or {}).get("label") or f"apple-rss-{len(items)}"
                     author = ((entry.get("author") or {}).get("name") or {}).get("label")
                     pain_summary = _make_pain_point_summary(text)
 
@@ -363,11 +508,19 @@ class ReviewSitesScraper(BaseSourceScraper):
                             "pain_point_summary": pain_summary,
                         },
                     ))
+
+                logger.info(
+                    "Apple App Store (iTunes RSS): page %d — kept %d / %d (skipped_positive=%d) for '%s'",
+                    page, page_kept, page_raw, page_raw - page_kept, target_brand,
+                )
             except Exception as exc:
-                logger.warning("Apple Store page %d failed for '%s': %s", page, target_brand, exc)
+                logger.warning("Apple App Store (iTunes RSS) page %d failed for '%s': %s", page, target_brand, exc)
                 break
 
-        logger.info("Apple Store: %d negative reviews for '%s'", len(items), target_brand)
+        logger.info(
+            "Apple App Store (iTunes RSS fallback): %d negative-signal reviews total for '%s'",
+            len(items), target_brand,
+        )
         return items
 
     # ------------------------------------------------------------------
