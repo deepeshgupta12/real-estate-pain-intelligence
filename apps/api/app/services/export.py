@@ -56,6 +56,7 @@ class ExportService:
             "items_processed": run.items_processed,
             "error_message": run.error_message,
             "orchestrator_notes": run.orchestrator_notes,
+            "session_notes": getattr(run, "session_notes", None),
             "started_at": ExportService._serialize_datetime(run.started_at),
             "last_heartbeat_at": ExportService._serialize_datetime(run.last_heartbeat_at),
             "completed_at": ExportService._serialize_datetime(run.completed_at),
@@ -448,10 +449,15 @@ class ExportService:
             [
                 f"Run ID: {run_id}",
                 f"Brand: {run['target_brand']}",
-                f"Source: {run['source_name']}",
+                f"Source(s): {run['source_name']}",
                 f"Generated At: {generated_at.isoformat()}",
                 f"Pipeline Stage: {run['pipeline_stage']}",
                 f"Run Status: {run['status']}",
+                *(
+                    [f"Session Notes: {run['session_notes']}"]
+                    if run.get("session_notes")
+                    else []
+                ),
             ],
             40,
             y,
