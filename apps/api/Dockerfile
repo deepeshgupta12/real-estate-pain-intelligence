@@ -6,10 +6,12 @@ FROM python:3.11 AS builder
 
 WORKDIR /build
 
-# Copy dependency file
+# Copy the package descriptor and source — setuptools needs the app/ directory
+# to build the wheel (declared in [tool.setuptools] packages = ["app"])
 COPY pyproject.toml ./
+COPY app/ ./app/
 
-# Install dependencies into an isolated prefix so we can copy them cleanly
+# Install all declared dependencies into an isolated prefix
 RUN pip install --upgrade pip \
     && pip install --prefix=/install --no-warn-script-location .
 
