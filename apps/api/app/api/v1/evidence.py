@@ -106,8 +106,11 @@ def list_raw_evidence(
     if updated:
         db.commit()
 
+    # Explicitly convert ORM objects to Pydantic schema instances.
+    # response_model=dict[str, Any] does NOT auto-serialize ORM objects —
+    # FastAPI only auto-converts when response_model is a Pydantic model directly.
     return {
-        "items": list(evidence_items),
+        "items": [RawEvidenceResponse.model_validate(e) for e in evidence_items],
         "total": total,
         "limit": limit,
         "offset": offset,
