@@ -13,14 +13,17 @@ Guard strategy:
   1. DO $$ ... EXCEPTION WHEN duplicate_object THEN NULL $$ block to create
      the enum type — works on ALL PostgreSQL versions (unlike CREATE TYPE
      IF NOT EXISTS which requires PG 12+).
-  2. create_type=False on sa.Enum — prevents SQLAlchemy from firing a second
-     CREATE TYPE via its before_create event hook when op.create_table runs.
+  2. Use sqlalchemy.dialects.postgresql.ENUM (not sa.Enum) with create_type=False
+     — this is the ONLY type that fully suppresses SQLAlchemy's before_create
+     event hook.  sa.Enum is the generic cross-database type; it ignores
+     create_type=False and always fires before_create.
   3. inspect(bind).has_table() — skips the CREATE TABLE block entirely if the
      table already exists.
 """
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import inspect, text
+from sqlalchemy.dialects.postgresql import ENUM as PgEnum
 
 revision = "0017_users_table"
 down_revision = "0016_retrieval_pgvector"
@@ -30,9 +33,7 @@ depends_on = None
 
 def upgrade() -> None:
     # Step 1: create the enum type if it doesn't already exist.
-    # We use a PL/pgSQL DO block with EXCEPTION handling instead of
-    # "CREATE TYPE IF NOT EXISTS" because that syntax requires PG 12+.
-    # This DO block works on PG 9.x, 10, 11, 12, 13, 14, 15, 16+.
+    # DO $$ EXCEPTION block works on ALL PostgreSQL versions (9.x–16+).
     op.execute(text("""
         DO $$ BEGIN
             CREATE TYPE user_role_enum AS ENUM ('admin', 'analyst', 'viewer');
@@ -41,8 +42,11 @@ def upgrade() -> None:
     """))
 
     # Step 2: create the users table only when it doesn't already exist.
-    # create_type=False on the Enum column suppresses the SQLAlchemy
-    # before_create hook that would otherwise fire a second CREATE TYPE.
+    # IMPORTANT: use PgEnum (sqlalchemy.dialects.postgresql.ENUM) with
+    # create_type=False — NOT sa.Enum.  sa.Enum ignores create_type=False
+    # and fires a bare CREATE TYPE via its before_create event, which raises
+    # DuplicateObject when the type already exists.  PgEnum fully respects
+    # create_type=False and skips the CREATE TYPE entirely.
     bind = op.get_bind()
     if not inspect(bind).has_table("users"):
         op.create_table(
@@ -53,7 +57,7 @@ def upgrade() -> None:
             sa.Column("full_name", sa.String(255), nullable=True),
             sa.Column(
                 "role",
-                sa.Enum("admin", "analyst", "viewer", name="user_role_enum", create_type=False),
+                PgEnum("admin", "analyst", "viewer", name="user_role_enum", create_type=False),
                 nullable=False,
                 server_default="analyst",
             ),

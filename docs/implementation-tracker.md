@@ -1336,10 +1336,10 @@ Branch: `feat/step-35-enhancements`
 - **No context → broad scraping**: when `session_notes` is empty/None, `context_str` is `None` and all scrapers run their default queries unchanged.
 - **Frontend UI**: violet chip toggles + custom textarea in Run Setup; session cards show `🎯 chip labels` or `💬 free text`.
 
-**Migration 0017 idempotency — PostgreSQL version fix:**
-- Previous fix used `CREATE TYPE IF NOT EXISTS` which requires PostgreSQL 12+.
-- Final fix: replaced with `DO $$ BEGIN ... EXCEPTION WHEN duplicate_object THEN NULL; END $$` block which works on all PostgreSQL versions (9.x through 16+).
-- Combined with `create_type=False` on `sa.Enum` (suppresses SQLAlchemy `before_create` hook) and `inspect(bind).has_table("users")` guard.
+**Migration 0017 idempotency — final fix (PgEnum):**
+- Root cause: `sa.Enum` is SQLAlchemy's generic cross-database type — `create_type=False` is silently ignored; the `before_create` event still fires a bare `CREATE TYPE`, raising `DuplicateObject` when the enum already exists.
+- Fix: switched to `sqlalchemy.dialects.postgresql.ENUM` (imported as `PgEnum`) with `create_type=False`. This PostgreSQL-specific type fully respects `create_type=False` and skips the CREATE TYPE entirely.
+- Combined with `DO $$ EXCEPTION WHEN duplicate_object $$ NULL` (all PG versions 9.x–16+) and `inspect(bind).has_table("users")` guard.
 - File: `apps/api/alembic/versions/0017_users_table.py`
 
 **Files changed:**
