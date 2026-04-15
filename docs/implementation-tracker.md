@@ -1342,6 +1342,11 @@ Branch: `feat/step-35-enhancements`
 - Combined with `DO $$ EXCEPTION WHEN duplicate_object $$ NULL` (all PG versions 9.x–16+) and `inspect(bind).has_table("users")` guard.
 - File: `apps/api/alembic/versions/0017_users_table.py`
 
+**UI resilience fix — workspace-shell.tsx Promise.allSettled:**
+- Root cause: `Promise.all` in `refreshWorkspace` failed atomically when any one endpoint returned 500. This caused `availableSources` to stay empty (platform checkboxes blank) and showed "NetworkError" even though the sources endpoint itself was fine.
+- Fix: replaced both `Promise.all` calls in `refreshWorkspace` with `Promise.allSettled`. Each endpoint that succeeds populates its state independently. Non-fatal errors are logged to console; the full-page error banner only shows if the health check itself fails.
+- File: `apps/web/src/components/console/workspace-shell.tsx`
+
 **Files changed:**
 - `apps/api/app/scrapers/context_utils.py` — NEW: `CONTEXT_KEYWORD_MAP` + `extract_context_keywords()`
 - `apps/api/app/scrapers/base.py` — updated `scrape()` signature

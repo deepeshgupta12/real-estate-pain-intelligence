@@ -235,17 +235,20 @@ export function WorkspaceShell({
         setWorkspaceMessage(successMessage);
       }
 
+      // Use allSettled so a single failing endpoint (e.g. a missing DB column during
+      // a migration gap) cannot wipe out the entire UI initialisation.  Each call
+      // that succeeds still populates its state; only the failing ones are skipped.
       try {
         const [
-          health,
-          meta,
-          hardening,
-          observability,
-          queue,
-          events,
-          runsData,
-          sourcesData,
-        ] = await Promise.all([
+          healthResult,
+          metaResult,
+          hardeningResult,
+          observabilityResult,
+          queueResult,
+          eventsResult,
+          runsResult,
+          sourcesResult,
+        ] = await Promise.allSettled([
           fetchApiHealth(),
           fetchApiMeta(),
           fetchFinalHardeningOverview(),
@@ -256,22 +259,52 @@ export function WorkspaceShell({
           fetchSupportedSources(),
         ]);
 
-        setApiStatus(health.status === "ok" ? "Connected" : health.status);
-        setApiSubtitle(`${health.app_name} • ${health.environment}`);
-        setApiVersion(meta.version);
-        setEnvironment(meta.environment);
-        setAppName(meta.app_name);
-        setApiPrefix(meta.api_prefix);
+        // Collect non-critical errors for display
+        const errors: string[] = [];
+        const settled = <T,>(r: PromiseSettledResult<T>, label: string): T | undefined => {
+          if (r.status === "fulfilled") return r.value;
+          errors.push(`${label}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`);
+          return undefined;
+        };
 
-        setHardeningOverview(hardening);
-        setObservabilityOverview(observability);
-        setQueueHealth(queue);
-        setRecentEvents(events);
-        setRuns(runsData);
-        setAvailableSources(sourcesData);
+        const health = settled(healthResult, "health");
+        const meta = settled(metaResult, "meta");
+        const hardening = settled(hardeningResult, "hardening");
+        const observability = settled(observabilityResult, "observability");
+        const queue = settled(queueResult, "queue");
+        const events = settled(eventsResult, "events");
+        const runsData = settled(runsResult, "runs");
+        const sourcesData = settled(sourcesResult, "sources");
 
+        if (health) {
+          setApiStatus(health.status === "ok" ? "Connected" : health.status);
+          setApiSubtitle(`${health.app_name} • ${health.environment}`);
+        }
+        if (meta) {
+          setApiVersion(meta.version);
+          setEnvironment(meta.environment);
+          setAppName(meta.app_name);
+          setApiPrefix(meta.api_prefix);
+        }
+        if (hardening) setHardeningOverview(hardening);
+        if (observability) setObservabilityOverview(observability);
+        if (queue) setQueueHealth(queue);
+        if (events) setRecentEvents(events);
+        if (runsData) setRuns(runsData);
+        if (sourcesData && sourcesData.length > 0) setAvailableSources(sourcesData);
+
+        // Show a summarised error only if the core health check itself failed
+        if (errors.length > 0 && !health) {
+          setWorkspaceError(errors[0]);
+        } else if (errors.length > 0) {
+          // Non-fatal: log to console only, don't break the UI
+          console.warn("Some workspace endpoints returned errors:", errors);
+        }
+
+        const safeQueue = queueResult.status === "fulfilled" ? queueResult.value : [];
+        const safeRuns = runsData ?? [];
         const nextRunId =
-          preferredRunId ?? currentRun?.id ?? runsData[0]?.id ?? queue[0]?.run_id ?? null;
+          preferredRunId ?? currentRun?.id ?? safeRuns[0]?.id ?? safeQueue[0]?.run_id ?? null;
 
         if (nextRunId) {
           const [
@@ -280,7 +313,7 @@ export function WorkspaceShell({
             readinessData,
             scopedSummary,
             scopedQueue,
-          ] = await Promise.all([
+          ] = await Promise.allSettled([
             fetchScrapeRun(nextRunId),
             fetchRunDiagnostics(nextRunId),
             fetchRunReadiness(nextRunId),
@@ -293,13 +326,13 @@ export function WorkspaceShell({
             }),
           ]);
 
-          setCurrentRun(runData);
-          setCurrentDiagnostics(diagnosticsData);
-          setCurrentReadiness(readinessData);
-          setReviewSummary(scopedSummary);
-          setReviewQueue(scopedQueue);
+          if (runData.status === "fulfilled") setCurrentRun(runData.value);
+          if (diagnosticsData.status === "fulfilled") setCurrentDiagnostics(diagnosticsData.value);
+          if (readinessData.status === "fulfilled") setCurrentReadiness(readinessData.value);
+          if (scopedSummary.status === "fulfilled") setReviewSummary(scopedSummary.value);
+          if (scopedQueue.status === "fulfilled") setReviewQueue(scopedQueue.value);
         } else {
-          const [globalSummary, globalQueue] = await Promise.all([
+          const [globalSummary, globalQueue] = await Promise.allSettled([
             fetchReviewSummary(),
             fetchReviewQueue({ includeDetails: true, limit: 20, offset: 0 }),
           ]);
@@ -307,8 +340,8 @@ export function WorkspaceShell({
           setCurrentRun(null);
           setCurrentDiagnostics(null);
           setCurrentReadiness(null);
-          setReviewSummary(globalSummary);
-          setReviewQueue(globalQueue);
+          if (globalSummary.status === "fulfilled") setReviewSummary(globalSummary.value);
+          if (globalQueue.status === "fulfilled") setReviewQueue(globalQueue.value);
         }
       } catch (error) {
         setWorkspaceError(
