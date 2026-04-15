@@ -1,5 +1,7 @@
 # ── Stage 1: Build dependencies ──────────────────────────────────────────────
-FROM python:3.11-slim AS builder
+# Pin to bookworm (Debian stable). python:3.11-slim now resolves to trixie
+# (Debian testing) whose apt mirrors are unreliable inside Docker builds.
+FROM python:3.11-slim-bookworm AS builder
 
 WORKDIR /build
 
@@ -19,7 +21,7 @@ RUN pip install --upgrade pip \
     && pip install --prefix=/install --no-warn-script-location .
 
 # ── Stage 2: Runtime image ────────────────────────────────────────────────────
-FROM python:3.11-slim AS runtime
+FROM python:3.11-slim-bookworm AS runtime
 
 # Non-root user for security
 RUN groupadd -r appuser && useradd -r -g appuser appuser
