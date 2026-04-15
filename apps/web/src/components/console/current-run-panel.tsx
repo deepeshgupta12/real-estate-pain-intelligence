@@ -4,6 +4,7 @@ import {
   ScrapeRunResponse,
 } from "@/lib/api";
 import { SectionShell } from "@/components/console/section-shell";
+import { formatSourceIcons, formatSourceLabel } from "@/components/console/run-setup-panel";
 
 type CurrentRunPanelProps = {
   currentRun: ScrapeRunResponse | null;
@@ -40,7 +41,10 @@ export function CurrentRunPanel({
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <div className="card p-4">
               <p className="text-xs font-semibold text-slate-600 uppercase">Platform</p>
-              <p className="mt-2 text-lg font-semibold text-slate-900">{humanize(currentRun.source_name)}</p>
+              <p className="mt-1 text-base font-semibold text-slate-900">
+                {formatSourceIcons(currentRun.source_name)}{" "}
+                {formatSourceLabel(currentRun.source_name)}
+              </p>
             </div>
 
             <div className="card p-4">
@@ -73,9 +77,15 @@ export function CurrentRunPanel({
                 <p className="text-2xl font-semibold text-slate-900 mt-1">{currentRun.items_processed}</p>
               </div>
             </div>
+            {currentRun.session_notes && (
+              <div className="mt-4 pt-4 border-t border-slate-200">
+                <p className="text-xs font-semibold uppercase text-slate-500">Session Notes</p>
+                <p className="text-sm text-slate-700 mt-1 italic">💬 {currentRun.session_notes}</p>
+              </div>
+            )}
             {currentRun.orchestrator_notes && (
               <div className="mt-4 pt-4 border-t border-slate-200">
-                <p className="text-sm text-slate-600">Notes</p>
+                <p className="text-xs font-semibold uppercase text-slate-500">Pipeline Status</p>
                 <p className="text-sm text-slate-700 mt-1">{currentRun.orchestrator_notes}</p>
               </div>
             )}

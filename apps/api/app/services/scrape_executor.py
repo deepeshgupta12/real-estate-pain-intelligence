@@ -16,30 +16,55 @@ class ScrapeExecutionService:
     def execute_run(
         db: Session, run_id: int
     ) -> tuple[ScrapeRun, int, int, int, int, bool, bool]:
+        """
+        Execute a scrape run, supporting both single and multi-source configurations.
+
+        `run.source_name` may be a comma-separated list of source names
+        (e.g. "reddit,youtube,app_reviews").  Each source is scraped in sequence and
+        all evidence is collected into the same run, so downstream pipeline steps
+        (normalisation, intelligence, indexing, export, etc.) receive the full
+        multi-source corpus automatically — they all query by run_id, not source_name.
+        """
         settings = get_settings()
 
         run = OrchestratorService.dispatch_run(db, run_id)
         run = OrchestratorService.start_run(db, run.id)
 
-        scraper = ScraperRegistry.get_scraper(run.source_name)
+        # Parse comma-separated source list (backward-compatible with single-source runs)
+        source_names = [s.strip() for s in run.source_name.split(",") if s.strip()]
 
-        try:
-            scraped_items = scraper.scrape(run.target_brand)
-        except Exception as exc:
+        # Collect evidence from every selected source
+        all_scraped_items = []
+        failed_sources: list[str] = []
+
+        for source_name in source_names:
+            try:
+                scraper = ScraperRegistry.get_scraper(source_name)
+                items = scraper.scrape(run.target_brand)
+                all_scraped_items.extend(items)
+            except Exception as exc:
+                # Record failure but continue with remaining sources so a single bad
+                # source does not abort the entire multi-source run.
+                failed_sources.append(f"{source_name}: {exc}")
+
+        if not all_scraped_items and failed_sources:
+            # Every source failed — fail the run
             OrchestratorService.fail_run(
                 db=db,
                 run_id=run.id,
-                error_message=str(exc),
-                orchestrator_notes="Source scraper execution failed",
+                error_message="; ".join(failed_sources),
+                orchestrator_notes="All source scrapers failed",
             )
-            raise
+            raise RuntimeError(
+                f"All source scrapers failed for run {run_id}: {'; '.join(failed_sources)}"
+            )
 
-        discovered_count = len(scraped_items)
+        discovered_count = len(all_scraped_items)
 
         live_items_count = 0
         stub_items_count = 0
 
-        for item in scraped_items:
+        for item in all_scraped_items:
             fetch_mode = str((item.metadata_json or {}).get("fetch_mode") or "").strip().lower()
             if fetch_mode == "live":
                 live_items_count += 1
@@ -60,7 +85,7 @@ class ScrapeExecutionService:
         persisted_count = 0
         deduplicated_count = 0
 
-        for item in scraped_items:
+        for item in all_scraped_items:
             dedupe_key = item.dedupe_key or build_dedupe_key(
                 source_name=item.source_name,
                 external_id=item.external_id,
@@ -114,6 +139,18 @@ class ScrapeExecutionService:
             f"live_fetch_enabled={settings.scraper_enable_live_fetch}"
         )
 
+        source_summary = (
+            f"sources=[{run.source_name}]"
+            if "," in run.source_name
+            else f"source={run.source_name}"
+        )
+
+        partial_failure_note = (
+            f" | partial_failures=[{'; '.join(failed_sources)}]"
+            if failed_sources
+            else ""
+        )
+
         run = OrchestratorService.update_progress(
             db=db,
             run_id=run.id,
@@ -121,8 +158,9 @@ class ScrapeExecutionService:
             items_discovered=discovered_count,
             items_processed=persisted_count,
             orchestrator_notes=(
-                "Source scraper execution completed and evidence persisted "
-                f"(persisted={persisted_count}, deduplicated={deduplicated_count}, {mode_summary})"
+                f"Scrape completed ({source_summary}): "
+                f"persisted={persisted_count}, deduplicated={deduplicated_count}, "
+                f"{mode_summary}{partial_failure_note}"
             ),
         )
 

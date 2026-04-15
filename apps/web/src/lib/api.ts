@@ -17,6 +17,7 @@ export type ApiMetaResponse = {
 };
 
 export type ScrapeRunCreatePayload = {
+  /** Comma-separated list of one or more source names, e.g. "reddit" or "reddit,youtube,app_reviews" */
   source_name: string;
   target_brand: string;
   status?: string;
@@ -26,6 +27,8 @@ export type ScrapeRunCreatePayload = {
   items_processed?: number;
   error_message?: string;
   orchestrator_notes?: string;
+  /** User-authored context; persisted separately from orchestrator_notes so it is never overwritten */
+  session_notes?: string;
   started_at?: string | null;
   last_heartbeat_at?: string | null;
   completed_at?: string | null;
@@ -33,6 +36,7 @@ export type ScrapeRunCreatePayload = {
 
 export type ScrapeRunResponse = {
   id: number;
+  /** Comma-separated source name(s), e.g. "reddit" or "reddit,youtube" */
   source_name: string;
   target_brand: string;
   status: string;
@@ -42,6 +46,8 @@ export type ScrapeRunResponse = {
   items_processed: number;
   error_message: string | null;
   orchestrator_notes: string | null;
+  /** User-authored context entered at run-creation time */
+  session_notes: string | null;
   started_at: string | null;
   last_heartbeat_at: string | null;
   completed_at: string | null;

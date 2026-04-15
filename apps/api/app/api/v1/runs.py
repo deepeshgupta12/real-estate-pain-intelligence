@@ -28,6 +28,7 @@ def create_scrape_run(
         items_processed=payload.items_processed,
         error_message=payload.error_message,
         orchestrator_notes=payload.orchestrator_notes,
+        session_notes=payload.session_notes,
         started_at=payload.started_at,
         last_heartbeat_at=payload.last_heartbeat_at,
         completed_at=payload.completed_at,
