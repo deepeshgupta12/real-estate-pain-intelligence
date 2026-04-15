@@ -61,8 +61,11 @@ def list_scrape_runs(
     runs = db.scalars(
         base_stmt.order_by(ScrapeRun.id.desc()).limit(limit).offset(offset)
     ).all()
+    # Explicitly convert ORM objects to Pydantic schema instances.
+    # response_model=dict[str, Any] does NOT auto-serialize ORM objects —
+    # FastAPI only auto-converts when response_model is a Pydantic model directly.
     return {
-        "items": list(runs),
+        "items": [ScrapeRunResponse.model_validate(run) for run in runs],
         "total": total,
         "limit": limit,
         "offset": offset,

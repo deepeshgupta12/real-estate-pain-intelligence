@@ -1491,9 +1491,23 @@ Full codebase audit revealed confirmed bugs, silent gaps, and enhancement opport
 - `apps/web/src/app/page.tsx`
 - `.gitignore`
 
+#### Runtime Fix (post-deploy) — ORM→Pydantic serialization in paginated endpoints
+
+**Bug:** `GET /api/v1/evidence` and `GET /api/v1/runs` returned HTTP 500 with:
+`PydanticSerializationError: Unable to serialize unknown type: <class 'app.models.raw_evidence.RawEvidence'>`
+
+**Root cause:** When `response_model=dict[str, Any]`, FastAPI/Pydantic does NOT auto-convert SQLAlchemy ORM objects nested inside the dict's `"items"` list — unlike `response_model=list[SchemaType]` which triggers auto-conversion. Both endpoints were returning `list(orm_objects)` directly.
+
+**Fix applied in both endpoints:**
+- `apps/api/app/api/v1/evidence.py` — `"items": list(evidence_items)` → `[RawEvidenceResponse.model_validate(e) for e in evidence_items]`
+- `apps/api/app/api/v1/runs.py` — `"items": list(runs)` → `[ScrapeRunResponse.model_validate(run) for run in runs]`
+
+Branch: `feat/step-37-bug-fixes-enhancements` (hotfix commit on same branch)
+
 #### Test notes
 - TypeScript build passes cleanly (`tsc --noEmit` exit 0)
 - Python ORM + schema imports verified (psycopg not present in sandbox, but logic validated)
 - Dev-mode JWT bypass preserved — existing dev workflows with default `jwt_secret_key` are unaffected
 - Archived runs excluded from default `GET /api/v1/runs` listing; `?include_archived=true` to see them
 - Migration 0021 is backward-compatible: `archived_at` is nullable, existing rows unaffected
+- Post-deploy: explicit `model_validate()` in both paginated list endpoints confirmed to fix 500 errors
