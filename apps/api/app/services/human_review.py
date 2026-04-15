@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
@@ -18,6 +19,9 @@ from app.schemas.human_review import (
 )
 from app.services.final_hardening import FinalHardeningService
 from app.services.orchestrator import OrchestratorService
+from app.services.run_logger import get_run_logger, teardown_run_logger
+
+logger = logging.getLogger(__name__)
 
 
 class HumanReviewService:
@@ -163,70 +167,88 @@ class HumanReviewService:
 
     @staticmethod
     def generate_review_queue(db: Session, run_id: int) -> tuple[ScrapeRun, int]:
-        run = FinalHardeningService.ensure_run_not_failed(db, run_id)
-        FinalHardeningService.ensure_insights_exist(db, run_id)
+        run_logger, fh = get_run_logger(run_id)
+        run_logger.info("=== Review queue generation started for run %d ===", run_id)
+        try:
+            run = FinalHardeningService.ensure_run_not_failed(db, run_id)
+            FinalHardeningService.ensure_insights_exist(db, run_id)
 
-        insights = db.scalars(
-            select(AgentInsight)
-            .where(AgentInsight.scrape_run_id == run_id)
-            .order_by(AgentInsight.id.asc())
-        ).all()
+            insights = db.scalars(
+                select(AgentInsight)
+                .where(AgentInsight.scrape_run_id == run_id)
+                .order_by(AgentInsight.id.asc())
+            ).all()
 
-        evidence_map = HumanReviewService._load_evidence_map_from_insights(db, insights)
+            evidence_map = HumanReviewService._load_evidence_map_from_insights(db, insights)
 
-        db.execute(delete(HumanReviewItem).where(HumanReviewItem.scrape_run_id == run_id))
-        db.commit()
+            db.execute(delete(HumanReviewItem).where(HumanReviewItem.scrape_run_id == run_id))
+            db.commit()
 
-        OrchestratorService.update_progress(
-            db=db,
-            run_id=run_id,
-            pipeline_stage="human_review_queue_generation",
-            orchestrator_notes="Human review queue generation started",
-        )
+            run_logger.info("Generating review items for %d insights", len(insights))
 
-        generated_count = 0
-
-        for insight in insights:
-            evidence = evidence_map.get(insight.raw_evidence_id)
-            insight_metadata = insight.metadata_json or {}
-
-            item = HumanReviewItem(
-                scrape_run_id=run_id,
-                agent_insight_id=insight.id,
-                review_status="pending_review",
-                reviewer_decision=None,
-                reviewer_notes=None,
-                source_summary=HumanReviewService._build_source_summary(insight, evidence),
-                priority_label=insight.priority_label,
-                metadata_json={
-                    "journey_stage": insight.journey_stage,
-                    "taxonomy_cluster": insight.taxonomy_cluster,
-                    "competitor_label": insight.competitor_label,
-                    "confidence_score": insight.confidence_score,
-                    "pain_point_label": insight.pain_point_label,
-                    "analysis_mode": insight_metadata.get("analysis_mode"),
-                    "llm_attempted": insight_metadata.get("llm_attempted"),
-                    "llm_used": insight_metadata.get("llm_used"),
-                    "raw_evidence_id": insight.raw_evidence_id,
-                    "source_name": evidence.source_name if evidence else None,
-                    "platform_name": evidence.platform_name if evidence else None,
-                    "content_type": evidence.content_type if evidence else None,
-                },
+            OrchestratorService.update_progress(
+                db=db,
+                run_id=run_id,
+                pipeline_stage="human_review_queue_generation",
+                orchestrator_notes="Human review queue generation started",
             )
-            db.add(item)
-            generated_count += 1
 
-        db.commit()
+            generated_count = 0
 
-        run = OrchestratorService.update_progress(
-            db=db,
-            run_id=run_id,
-            pipeline_stage="human_review_queue_ready",
-            items_processed=run.items_processed,
-            orchestrator_notes="Human review queue generated successfully",
-        )
+            for insight in insights:
+                evidence = evidence_map.get(insight.raw_evidence_id)
+                insight_metadata = insight.metadata_json or {}
 
-        return run, generated_count
+                run_logger.debug(
+                    "Review item: insight_id=%s pain=%s priority=%s source=%s",
+                    insight.id, insight.pain_point_label, insight.priority_label,
+                    evidence.source_name if evidence else "N/A",
+                )
+
+                item = HumanReviewItem(
+                    scrape_run_id=run_id,
+                    agent_insight_id=insight.id,
+                    review_status="pending_review",
+                    reviewer_decision=None,
+                    reviewer_notes=None,
+                    source_summary=HumanReviewService._build_source_summary(insight, evidence),
+                    priority_label=insight.priority_label,
+                    metadata_json={
+                        "journey_stage": insight.journey_stage,
+                        "taxonomy_cluster": insight.taxonomy_cluster,
+                        "competitor_label": insight.competitor_label,
+                        "confidence_score": insight.confidence_score,
+                        "pain_point_label": insight.pain_point_label,
+                        "analysis_mode": insight_metadata.get("analysis_mode"),
+                        "llm_attempted": insight_metadata.get("llm_attempted"),
+                        "llm_used": insight_metadata.get("llm_used"),
+                        "raw_evidence_id": insight.raw_evidence_id,
+                        "source_name": evidence.source_name if evidence else None,
+                        "platform_name": evidence.platform_name if evidence else None,
+                        "content_type": evidence.content_type if evidence else None,
+                    },
+                )
+                db.add(item)
+                generated_count += 1
+
+            db.commit()
+
+            run_logger.info(
+                "=== Review queue complete for run %d — %d items generated ===",
+                run_id, generated_count,
+            )
+
+            run = OrchestratorService.update_progress(
+                db=db,
+                run_id=run_id,
+                pipeline_stage="human_review_queue_ready",
+                items_processed=run.items_processed,
+                orchestrator_notes=f"Human review queue generated: {generated_count} items",
+            )
+
+            return run, generated_count
+        finally:
+            teardown_run_logger(run_id, fh)
 
     @staticmethod
     def list_review_queue(

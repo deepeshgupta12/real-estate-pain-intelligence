@@ -1575,3 +1575,29 @@ Branch: `feat/step-37-bug-fixes-enhancements` (hotfix commit on same branch)
 
 **Action required (user):**
 - Run `cd apps/api && pip install google-play-scraper` (or `pip install -e .` to sync all deps from pyproject.toml)
+
+#### Runtime Fix 4 — App store 0-item root cause + full pipeline logging (identified from live run logs)
+
+**Root cause of 0 items from app_reviews and review_sites:**
+
+Both scrapers were returning 0 items despite being live. Two locale filters were stripping all results:
+
+1. **Google Play `lang="en"` filter** — `gps_reviews(app_id, lang="en", country="in", ...)` returns 0 reviews because Indian Square Yards app users write reviews in Hindi/Hinglish, not English. The `lang` parameter filters to English-only reviews, wiping the entire result set.
+   - Fixed in `app_reviews.py` and `review_sites.py`: removed `lang="en"` from `gps_reviews()` call. Fetches all languages, sentiment filter handles relevance.
+
+2. **Apple App Store RSS `params={"l":"en","cc":"in"}` filters** — These locale params cause the iTunes RSS feed to return an empty `entry` list for Indian apps whose reviews are primarily Hindi. Removing the params fetches all recent reviews regardless of language.
+   - Fixed in `app_reviews.py` and `review_sites.py`: removed `params={"l":"en","cc":"in"}` from `RetryingHttpClient.get_json()` call.
+   - Also expanded `app_reviews.py` Apple Store pages from 2 → 5 (matching `review_sites.py`) to collect up to 250 reviews.
+
+**Pipeline and agent logging — none existed before this fix:**
+
+`normalization.py`, `intelligence.py`, `human_review.py`, and `multilingual.py` had zero logging. All pipeline stage work was invisible — no log output anywhere.
+
+- Created `apps/api/app/services/run_logger.py` — shared utility providing `get_run_logger(run_id)` and `teardown_run_logger(run_id, fh)`. All pipeline services call these at the start and end of their main method to append to the same `logs/run_{id}.log` file.
+- `scrape_executor.py` updated to import from `run_logger.py` instead of duplicating the logic.
+- `normalization.py` — added full logging: items total, per-item errors, completion summary with counts.
+- `intelligence.py` — added logging: item count, LLM enabled/disabled, per-item pain label + journey stage + analysis mode, LLM fallback warnings, completion summary.
+- `human_review.py` — added logging: insight count, per-item debug (insight_id, pain, priority, source), completion count.
+- `multilingual.py` — added logging: items total, per-item errors, completion summary.
+
+Result: `logs/run_{id}.log` now captures the entire pipeline lifecycle — scrape → normalize → multilingual → intelligence → review queue — in one file.

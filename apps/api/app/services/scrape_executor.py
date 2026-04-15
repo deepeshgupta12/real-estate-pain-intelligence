@@ -12,59 +12,16 @@ from app.models.scrape_run import ScrapeRun
 from app.scrapers.registry import ScraperRegistry
 from app.scrapers.utils import build_dedupe_key
 from app.services.orchestrator import OrchestratorService
+from app.services.run_logger import get_run_logger, teardown_run_logger
 
 _module_logger = logging.getLogger(__name__)
 
-# Directory where per-run log files are written.  Created on first use.
+# Keep _LOGS_DIR accessible for the log-path note added to orchestrator_notes
 _LOGS_DIR = Path(__file__).resolve().parents[2] / "logs"
 
-
-def _get_run_logger(run_id: int) -> tuple[logging.Logger, logging.FileHandler]:
-    """
-    Return a logger that writes to logs/run_{run_id}.log.
-    The FileHandler is returned so the caller can close it when done.
-    """
-    _LOGS_DIR.mkdir(parents=True, exist_ok=True)
-    log_path = _LOGS_DIR / f"run_{run_id}.log"
-
-    run_logger = logging.getLogger(f"scrape_run.{run_id}")
-    run_logger.setLevel(logging.DEBUG)
-    run_logger.propagate = True  # also shows in main uvicorn log
-
-    # Avoid duplicate handlers if logger is reused within a process
-    if not any(
-        isinstance(h, logging.FileHandler) and getattr(h, "baseFilename", None) == str(log_path)
-        for h in run_logger.handlers
-    ):
-        fh = logging.FileHandler(log_path, encoding="utf-8")
-        fh.setLevel(logging.DEBUG)
-        fh.setFormatter(
-            logging.Formatter("%(asctime)s %(levelname)s %(name)s — %(message)s")
-        )
-        run_logger.addHandler(fh)
-
-    # Wire the file handler only to the common ancestor loggers to avoid duplicate
-    # lines caused by propagation.  Individual child loggers (e.g. app.scrapers.sources.*)
-    # inherit from "app" via normal propagation, so adding the handler once at the
-    # "app" level is sufficient.  We also attach it to the run-specific logger itself.
-    for name in ["app", f"scrape_run.{run_id}"]:
-        lg = logging.getLogger(name)
-        if not any(
-            isinstance(h, logging.FileHandler) and getattr(h, "baseFilename", None) == str(log_path)
-            for h in lg.handlers
-        ):
-            lg.addHandler(fh)
-
-    return run_logger, fh
-
-
-def _teardown_run_logger(run_id: int, fh: logging.FileHandler) -> None:
-    """Close and detach the file handler from the loggers wired to this run."""
-    for name in ["app", f"scrape_run.{run_id}"]:
-        lg = logging.getLogger(name)
-        if fh in lg.handlers:
-            lg.removeHandler(fh)
-    fh.close()
+# Re-export shared helpers under their old private names for backward compat
+_get_run_logger = get_run_logger
+_teardown_run_logger = teardown_run_logger
 
 
 class ScrapeExecutionService:

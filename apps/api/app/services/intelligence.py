@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 
 from sqlalchemy import delete, select
@@ -9,6 +10,9 @@ from app.models.scrape_run import ScrapeRun
 from app.services.final_hardening import FinalHardeningService
 from app.services.llm_intelligence import LLMIntelligenceService
 from app.services.orchestrator import OrchestratorService
+from app.services.run_logger import get_run_logger, teardown_run_logger
+
+logger = logging.getLogger(__name__)
 
 
 class IntelligenceService:
@@ -167,111 +171,143 @@ class IntelligenceService:
 
     @staticmethod
     def process_run(db: Session, run_id: int) -> tuple[ScrapeRun, int, int, int, int, int]:
-        run = FinalHardeningService.ensure_run_not_failed(db, run_id)
-        FinalHardeningService.ensure_evidence_exists(db, run_id)
+        run_logger, fh = get_run_logger(run_id)
+        run_logger.info("=== Intelligence processing started for run %d ===", run_id)
+        try:
+            run = FinalHardeningService.ensure_run_not_failed(db, run_id)
+            FinalHardeningService.ensure_evidence_exists(db, run_id)
 
-        evidence_items = db.scalars(
-            select(RawEvidence)
-            .where(RawEvidence.scrape_run_id == run_id)
-            .order_by(RawEvidence.id.asc())
-        ).all()
+            evidence_items = db.scalars(
+                select(RawEvidence)
+                .where(RawEvidence.scrape_run_id == run_id)
+                .order_by(RawEvidence.id.asc())
+            ).all()
 
-        db.execute(delete(AgentInsight).where(AgentInsight.scrape_run_id == run_id))
-        db.commit()
+            db.execute(delete(AgentInsight).where(AgentInsight.scrape_run_id == run_id))
+            db.commit()
 
-        total = len(evidence_items)
-        generated_count = 0
-        llm_generated_count = 0
-        deterministic_generated_count = 0
-        failed_count = 0
+            total = len(evidence_items)
+            generated_count = 0
+            llm_generated_count = 0
+            deterministic_generated_count = 0
+            failed_count = 0
 
-        OrchestratorService.update_progress(
-            db=db,
-            run_id=run_id,
-            pipeline_stage="intelligence_processing",
-            orchestrator_notes="Hybrid intelligence processing started",
-        )
+            llm_enabled = LLMIntelligenceService.is_enabled()
+            run_logger.info(
+                "Processing %d evidence items — LLM enabled=%s", total, llm_enabled
+            )
 
-        for evidence in evidence_items:
-            try:
-                baseline_fields = IntelligenceService._build_deterministic_fields(evidence)
-                final_fields = dict(baseline_fields)
+            OrchestratorService.update_progress(
+                db=db,
+                run_id=run_id,
+                pipeline_stage="intelligence_processing",
+                orchestrator_notes="Hybrid intelligence processing started",
+            )
 
-                analysis_mode = "deterministic_only"
-                llm_attempted = False
-                llm_used = False
-                llm_metadata: dict[str, Any] | None = None
-                llm_error: str | None = None
+            for evidence in evidence_items:
+                try:
+                    baseline_fields = IntelligenceService._build_deterministic_fields(evidence)
+                    final_fields = dict(baseline_fields)
 
-                if LLMIntelligenceService.is_enabled():
-                    llm_attempted = True
-                    try:
-                        llm_fields, llm_metadata = LLMIntelligenceService.generate_hybrid_fields(
+                    analysis_mode = "deterministic_only"
+                    llm_attempted = False
+                    llm_used = False
+                    llm_metadata: dict[str, Any] | None = None
+                    llm_error: str | None = None
+
+                    if llm_enabled:
+                        llm_attempted = True
+                        try:
+                            llm_fields, llm_metadata = LLMIntelligenceService.generate_hybrid_fields(
+                                evidence=evidence,
+                                baseline_fields=baseline_fields,
+                            )
+                            final_fields = IntelligenceService._merge_hybrid_fields(
+                                baseline_fields=baseline_fields,
+                                llm_fields=llm_fields,
+                            )
+                            analysis_mode = "llm_assisted"
+                            llm_used = True
+                            llm_generated_count += 1
+                        except Exception as exc:
+                            analysis_mode = "deterministic_fallback"
+                            llm_used = False
+                            llm_error = str(exc)
+                            run_logger.warning(
+                                "LLM failed for evidence id=%s, falling back to deterministic: %s",
+                                evidence.id, exc,
+                            )
+                            deterministic_generated_count += 1
+                    else:
+                        deterministic_generated_count += 1
+
+                    run_logger.debug(
+                        "Evidence id=%s → pain=%s stage=%s mode=%s",
+                        evidence.id,
+                        final_fields.get("pain_point_label"),
+                        final_fields.get("journey_stage"),
+                        analysis_mode,
+                    )
+
+                    insight = AgentInsight(
+                        scrape_run_id=run_id,
+                        raw_evidence_id=evidence.id,
+                        journey_stage=final_fields["journey_stage"],
+                        pain_point_label=final_fields["pain_point_label"],
+                        pain_point_summary=final_fields["pain_point_summary"],
+                        taxonomy_cluster=final_fields["taxonomy_cluster"],
+                        root_cause_hypothesis=final_fields["root_cause_hypothesis"],
+                        competitor_label=final_fields["competitor_label"],
+                        priority_label=final_fields["priority_label"],
+                        action_recommendation=final_fields["action_recommendation"],
+                        confidence_score=final_fields["confidence_score"],
+                        insight_status="generated",
+                        metadata_json=IntelligenceService._build_metadata(
                             evidence=evidence,
                             baseline_fields=baseline_fields,
-                        )
-                        final_fields = IntelligenceService._merge_hybrid_fields(
-                            baseline_fields=baseline_fields,
-                            llm_fields=llm_fields,
-                        )
-                        analysis_mode = "llm_assisted"
-                        llm_used = True
-                        llm_generated_count += 1
-                    except Exception as exc:
-                        analysis_mode = "deterministic_fallback"
-                        llm_used = False
-                        llm_error = str(exc)
-                        deterministic_generated_count += 1
-                else:
-                    deterministic_generated_count += 1
+                            final_fields=final_fields,
+                            analysis_mode=analysis_mode,
+                            llm_attempted=llm_attempted,
+                            llm_used=llm_used,
+                            llm_metadata=llm_metadata,
+                            llm_error=llm_error,
+                        ),
+                    )
+                    db.add(insight)
+                    generated_count += 1
+                except Exception as exc:
+                    failed_count += 1
+                    run_logger.warning("Intelligence failed for evidence id=%s: %s", evidence.id, exc)
 
-                insight = AgentInsight(
-                    scrape_run_id=run_id,
-                    raw_evidence_id=evidence.id,
-                    journey_stage=final_fields["journey_stage"],
-                    pain_point_label=final_fields["pain_point_label"],
-                    pain_point_summary=final_fields["pain_point_summary"],
-                    taxonomy_cluster=final_fields["taxonomy_cluster"],
-                    root_cause_hypothesis=final_fields["root_cause_hypothesis"],
-                    competitor_label=final_fields["competitor_label"],
-                    priority_label=final_fields["priority_label"],
-                    action_recommendation=final_fields["action_recommendation"],
-                    confidence_score=final_fields["confidence_score"],
-                    insight_status="generated",
-                    metadata_json=IntelligenceService._build_metadata(
-                        evidence=evidence,
-                        baseline_fields=baseline_fields,
-                        final_fields=final_fields,
-                        analysis_mode=analysis_mode,
-                        llm_attempted=llm_attempted,
-                        llm_used=llm_used,
-                        llm_metadata=llm_metadata,
-                        llm_error=llm_error,
-                    ),
-                )
-                db.add(insight)
-                generated_count += 1
-            except Exception:
-                failed_count += 1
+            db.commit()
 
-        db.commit()
+            run_logger.info(
+                "=== Intelligence complete for run %d — generated=%d (llm=%d, deterministic=%d), failed=%d ===",
+                run_id, generated_count, llm_generated_count, deterministic_generated_count, failed_count,
+            )
 
-        run = OrchestratorService.update_progress(
-            db=db,
-            run_id=run_id,
-            pipeline_stage="intelligence_completed",
-            items_processed=run.items_processed,
-            orchestrator_notes="Hybrid intelligence processing completed",
-        )
+            run = OrchestratorService.update_progress(
+                db=db,
+                run_id=run_id,
+                pipeline_stage="intelligence_completed",
+                items_processed=run.items_processed,
+                orchestrator_notes=(
+                    f"Intelligence completed: generated={generated_count} "
+                    f"(llm={llm_generated_count}, deterministic={deterministic_generated_count}), "
+                    f"failed={failed_count}"
+                ),
+            )
 
-        return (
-            run,
-            total,
-            generated_count,
-            llm_generated_count,
-            deterministic_generated_count,
-            failed_count,
-        )
+            return (
+                run,
+                total,
+                generated_count,
+                llm_generated_count,
+                deterministic_generated_count,
+                failed_count,
+            )
+        finally:
+            teardown_run_logger(run_id, fh)
 
     @staticmethod
     def list_run_insights(db: Session, run_id: int) -> list[AgentInsight]:

@@ -43,7 +43,15 @@ NEGATIVE_SIGNAL_KEYWORDS = [
     "money lost", "lost money", "no support", "poor support", "bad support",
     "fake listing", "already sold", "not available", "beware", "warning",
     "alert", "scammed", "cheated", "ripped off", "problem", "issue", "error",
+    # Review/experience signal words — include user-generated opinion content
     "review", "honest", "reality", "truth", "exposed", "dark side",
+    "experience", "my experience", "worth it", "should you", "should i",
+    "before you", "watch before", "must watch", "vs ", "comparison",
+    "better than", "worse than", "rating", "feedback", "opinion",
+    "real review", "unboxing", "walkthrough", "guide", "tips",
+    # Hindi/Hinglish pain keywords (transliterated)
+    "dhoka", "fraud hai", "problem hai", "bekaar", "bakwas",
+    "paisa barbad", "ganda", "time waste", "bekar",
 ]
 
 
@@ -70,7 +78,7 @@ class YouTubeScraper(BaseSourceScraper):
     # ------------------------------------------------------------------
 
     def _build_query(self, target_brand: str, context: str | None = None) -> str:
-        base = f'"{target_brand}" real estate review'
+        base = f"{target_brand} review experience India"
         if context:
             from app.scrapers.context_utils import extract_context_keywords as _ekw
             kws = _ekw(context)[:3]
@@ -79,7 +87,10 @@ class YouTubeScraper(BaseSourceScraper):
         return base
 
     def _build_search_query(self, target_brand: str, context: str | None = None) -> str:
-        base = f"{target_brand} real estate app review India"
+        # Use complaint/review-focused query to avoid returning brand's own promotional content.
+        # Avoid exact-match quotes on brand name — they limit results unnecessarily.
+        # "complaint review experience" attracts user-generated opinion content.
+        base = f"{target_brand} review complaint experience India"
         if context:
             from app.scrapers.context_utils import extract_context_keywords as _ekw
             kws = _ekw(context)[:2]
