@@ -1504,6 +1504,32 @@ Full codebase audit revealed confirmed bugs, silent gaps, and enhancement opport
 
 Branch: `feat/step-37-bug-fixes-enhancements` (hotfix commit on same branch)
 
+#### Runtime Fix 2 — Frontend + Scraper pipeline fixes (Step 38)
+
+**1. Nested button HTML error (hydration crash)**
+- `run-setup-panel.tsx` run row was a `<button>` containing an Archive `<button>` — invalid HTML, caused React hydration error
+- Fixed: outer run row changed from `<button>` to `<div role="button" tabIndex={0}>` with onClick + onKeyDown (keyboard accessible, semantically equivalent)
+
+**2. Context double-parsing bug in scrape_executor.py**
+- `scrape_executor.py` was calling `extract_context_keywords(session_notes)` first, joining the result into a plain string, then passing that to scrapers who called `extract_context_keywords(joined_string)` AGAIN — double-parsing broke multi-word keywords like "mobile app", "fake listing"
+- Fixed: pass `run.session_notes` directly; each scraper now parses it internally with the correct `[CONTEXT: ...]` format
+
+**3. Silent exception eating in app_reviews.py**
+- `except Exception: return []` was silently swallowing all Google Play SDK and Apple Store errors with no log output
+- Fixed: all exception blocks now call `logger.warning(...)` with the full error message so it appears in the run log file
+
+**4. Per-run log files**
+- New: `logs/run_{run_id}.log` created automatically for every scrape run
+- All scraper logger output (including google_play_scraper, iTunes RSS, Reddit, YouTube, HN) is captured in the file
+- Log file path is appended to `orchestrator_notes` on the run so you can find it in the dashboard
+- Share `logs/run_{N}.log` for debugging without needing to capture the full terminal
+- File: `apps/api/app/services/scrape_executor.py`
+
+**5. Review queue source_summary display fix**
+- `source_summary` is stored as pipe-delimited `"pain_label | description | cause | recommendation | raw_text"` — frontend was showing the full concatenated string
+- Fixed: added `parseSourceSummary()` helper that extracts `label` and `summary` parts; cards now show the pain point label as a violet chip + readable summary sentence
+- File: `apps/web/src/components/console/review-console-panel.tsx`
+
 #### Test notes
 - TypeScript build passes cleanly (`tsc --noEmit` exit 0)
 - Python ORM + schema imports verified (psycopg not present in sandbox, but logic validated)
@@ -1511,3 +1537,4 @@ Branch: `feat/step-37-bug-fixes-enhancements` (hotfix commit on same branch)
 - Archived runs excluded from default `GET /api/v1/runs` listing; `?include_archived=true` to see them
 - Migration 0021 is backward-compatible: `archived_at` is nullable, existing rows unaffected
 - Post-deploy: explicit `model_validate()` in both paginated list endpoints confirmed to fix 500 errors
+- Run log files: `logs/` directory is auto-created; `logs/run_1.log` etc. written on each scrape execution

@@ -9,6 +9,7 @@ Strategy:
     (rating >= 4 AND no negative signal keywords in text)
   - Pain point summary generated from review text for each item
 """
+import logging
 from datetime import datetime, timezone
 
 from app.core.config import get_settings
@@ -16,6 +17,8 @@ from app.scrapers.base import BaseSourceScraper
 from app.scrapers.http_client import RetryingHttpClient
 from app.scrapers.types import ScrapedItem
 from app.scrapers.utils import build_dedupe_key, build_payload_snapshot, normalize_whitespace
+
+logger = logging.getLogger(__name__)
 
 # Keywords that signal a complaint even in an otherwise positive review
 NEGATIVE_SIGNAL_KEYWORDS = [
@@ -143,6 +146,7 @@ class AppReviewsScraper(BaseSourceScraper):
                 sort=Sort.NEWEST,
                 count=100,
             )
+            logger.info("Google Play SDK: fetched %d raw reviews for '%s' app_id=%s", len(result), target_brand, app_id)
             items: list[ScrapedItem] = []
             for r in result:
                 text = normalize_whitespace((r.get("content") or "").strip())
@@ -190,10 +194,13 @@ class AppReviewsScraper(BaseSourceScraper):
                         "pain_point_summary": pain_summary,
                     },
                 ))
+            logger.info("Google Play SDK: %d negative-signal reviews kept for '%s'", len(items), target_brand)
             return items
         except ImportError:
+            logger.warning("google_play_scraper not installed — skipping Google Play SDK tier for '%s'", target_brand)
             return []
-        except Exception:
+        except Exception as exc:
+            logger.warning("Google Play scrape failed for '%s' (app_id=%s): %s", target_brand, app_id, exc)
             return []
 
     # ------------------------------------------------------------------
@@ -275,9 +282,11 @@ class AppReviewsScraper(BaseSourceScraper):
                             "pain_point_summary": pain_summary,
                         },
                     ))
-            except Exception:
+            except Exception as exc:
+                logger.warning("Apple App Store page %d failed for '%s': %s", page, target_brand, exc)
                 break  # stop if a page fails
 
+        logger.info("Apple App Store: %d negative-signal reviews for '%s'", len(items), target_brand)
         return items
 
     # ------------------------------------------------------------------

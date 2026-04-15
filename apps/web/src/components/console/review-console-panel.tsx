@@ -46,6 +46,19 @@ function humanize(value: string | null | undefined): string {
   return value.replaceAll("_", " ");
 }
 
+/**
+ * source_summary is stored as pipe-delimited: "pain_label | summary | cause | recommendation | raw_text"
+ * Extract the first two meaningful parts for a clean card preview.
+ */
+function parseSourceSummary(raw: string | null | undefined): { label: string; summary: string; raw: string } {
+  if (!raw) return { label: "", summary: "No summary", raw: "" };
+  const parts = raw.split(" | ").map((p) => p.trim()).filter(Boolean);
+  if (parts.length >= 2) {
+    return { label: parts[0], summary: parts[1], raw };
+  }
+  return { label: "", summary: raw, raw };
+}
+
 export function ReviewConsolePanel({
   initialRunId,
   activeRunId,
@@ -466,6 +479,7 @@ export function ReviewConsolePanel({
                 const isSelected = selectedIdSet.has(item.id);
                 const sourceName = getSourceName(item);
                 const itemStatus = getItemStatus(item);
+                const parsed = parseSourceSummary(item.source_summary);
 
                 return (
                   <div
@@ -495,6 +509,11 @@ export function ReviewConsolePanel({
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-semibold text-slate-900 text-sm">#{item.id}</p>
                           <span className="status-pill info">{humanize(sourceName)}</span>
+                          {parsed.label && (
+                            <span className="inline-block rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">
+                              {humanize(parsed.label)}
+                            </span>
+                          )}
                           <span
                             className={`status-pill ${
                               itemStatus === "approved"
@@ -507,8 +526,9 @@ export function ReviewConsolePanel({
                             {itemStatus === "pending" ? "⏳ Pending" : itemStatus === "approved" ? "✓ Approved" : "✕ Rejected"}
                           </span>
                         </div>
+                        {/* Show parsed summary (first meaningful sentence) not the full pipe-joined string */}
                         <p className="text-sm text-slate-600 mt-2 line-clamp-2">
-                          {item.source_summary ?? "No summary"}
+                          {parsed.summary}
                         </p>
                       </div>
                     </div>
@@ -517,8 +537,8 @@ export function ReviewConsolePanel({
                     {selectedItem?.id === item.id && (
                       <div className="mt-4 pt-4 border-t border-slate-200">
                         <div className="space-y-3 text-sm mb-4">
-                          {item.source_summary && (
-                            <p className="text-slate-700 leading-relaxed">{item.source_summary}</p>
+                          {parsed.summary && (
+                            <p className="text-slate-700 leading-relaxed">{parsed.summary}</p>
                           )}
                           <div className="grid grid-cols-2 gap-4">
                             <div>
